@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Done cards older than 14 days are hidden on the Kanban Done column. **Show archived (N)** reveals them, muted. The window is `DPC_ARCHIVE_DAYS` or `archiveDays` in `security-config.json` (default 14). Cards are never deleted, and `cards.json` gains no archive field.
+- Optional `note` on a card for a short evidence line (a commit or a URL). Omitted from `cards.json` when empty. Set from `add_card`, `update_card`, and `move_card`. Shown on the board and matched by `search_desk`.
+
+### Changed
+- `get_desk_summary` and `get_project_status` omit archived cards from lists and report an archived count. Pass `includeArchived` to list them. `search_desk` still returns archived cards and marks them. Moving a card out of done, or any edit that refreshes `updated`, brings it back. The Done in 7 days stat and the analytics tab are unchanged.
+
+### Fixed
+- Saving `cards.json` on Linux uses `rename(2)`. `FileManager.replaceItemAt` fails there even when the file exists, so a second save never landed.
+
 ## [2.0.0] - 2026-10-31
 
 ### Licence

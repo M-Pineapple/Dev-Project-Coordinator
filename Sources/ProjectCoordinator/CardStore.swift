@@ -21,6 +21,8 @@ public actor CardStore {
     /// Re-read from disk. Called before every mutation and snapshot so a long-running
     /// process (desk server, MCP host) never saves over changes another process made.
     /// A missing or unreadable file keeps the in-memory board.
+    /// Loading does not write. Archive state is derived from the done column and `updated`,
+    /// so opening the board does not dirty cards.json or the git mirror.
     public func load() {
         guard let data = try? Data(contentsOf: fileURL),
               let loaded = try? decoder.decode(Board.self, from: data) else {
@@ -87,7 +89,8 @@ public actor CardStore {
         column: String? = nil,
         memoryRef: String? = nil,
         linkedPR: String? = nil,
-        due: Date? = nil
+        due: Date? = nil,
+        note: String? = nil
     ) throws -> Card {
         load()
         let col = column ?? "backlog"
@@ -112,14 +115,15 @@ public actor CardStore {
             order: (board.cards.map(\.order).max() ?? -1) + 1,
             due: due,
             memoryRef: memoryRef,
-            linkedPR: linkedPR
+            linkedPR: linkedPR,
+            note: try cleanedNote(note)
         )
         board.cards.append(card)
         try save()
         return card
     }
 
-    public func moveCard(id: String, column: String) throws -> Card {
+    public func moveCard(id: String, column: String, note: String? = nil) throws -> Card {
         load()
         let trimmedID = try Card.normalizedID(id)
         guard board.columns.contains(column) else {
@@ -129,6 +133,11 @@ public actor CardStore {
             throw CoordinatorError.cardNotFound
         }
         board.cards[index].column = column
+        if let note {
+            board.cards[index].note = try cleanedNote(note)
+        }
+        // `updated` is the archive clock. Refreshing it, and leaving done, brings the card back.
+        // The card is never removed from cards.json. A missing note leaves any existing note in place.
         board.cards[index].updated = Date()
         try save()
         return board.cards[index]
@@ -140,7 +149,8 @@ public actor CardStore {
         column: String? = nil,
         memoryRef: String? = nil,
         due: Date? = nil,
-        linkedPR: String? = nil
+        linkedPR: String? = nil,
+        note: String? = nil
     ) throws -> Card {
         load()
         let trimmedID = try Card.normalizedID(id)
@@ -163,9 +173,23 @@ public actor CardStore {
         if let memoryRef { board.cards[index].memoryRef = memoryRef }
         if let due { board.cards[index].due = due }
         if let linkedPR { board.cards[index].linkedPR = linkedPR }
+        if let note { board.cards[index].note = try cleanedNote(note) }
+        // Any edit refreshes `updated`, so a done card older than the archive window
+        // returns to the board. Leaving done does the same. Nothing is deleted.
         board.cards[index].updated = Date()
         try save()
         return board.cards[index]
+    }
+
+    /// Blank text clears the note. Nil means the caller did not send one.
+    private func cleanedNote(_ raw: String?) throws -> String? {
+        guard let raw else { return nil }
+        let cleaned = try SecurityValidator.validateText(
+            raw,
+            maxLength: SecurityValidator.maxNotesLength,
+            fieldName: "Card note"
+        )
+        return cleaned.isEmpty ? nil : cleaned
     }
 
     public func renameColumn(from old: String, to newName: String) throws {

@@ -79,6 +79,14 @@ public enum MCPBootstrap {
         ])
     }
 
+    private static func boolArg(_ value: Value?) -> Bool {
+        if let flag = value?.boolValue { return flag }
+        if let raw = value?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            return raw == "true" || raw == "1"
+        }
+        return false
+    }
+
     private static func boolProp(_ description: String) -> Value {
         .object([
             "type": .string("boolean"),
@@ -98,8 +106,13 @@ public enum MCPBootstrap {
         [
             Tool(
                 name: "get_desk_summary",
-                description: "Use this first. Compact desk under 800 tokens. Skip list_projects unless the user asks for a deep dive.",
-                inputSchema: objectSchema(properties: [:], required: [])
+                description: "Use this first. Compact desk under 800 tokens. Done cards older than the archive window are left out of the list. The archived count is still reported. Pass includeArchived to list those cards. Skip list_projects unless the user asks for a deep dive.",
+                inputSchema: objectSchema(
+                    properties: [
+                        "includeArchived": boolProp("When true, list archived done cards as well. Default false.")
+                    ],
+                    required: []
+                )
             ),
             Tool(
                 name: "list_projects",
@@ -108,15 +121,18 @@ public enum MCPBootstrap {
             ),
             Tool(
                 name: "get_project_status",
-                description: "Full detail for one project, including notes. Prefer get_desk_summary first.",
+                description: "Full detail for one project, including notes and cards. Archived done cards are omitted from the card list. The archived count is still reported. Pass includeArchived to list them. Prefer get_desk_summary first.",
                 inputSchema: objectSchema(
-                    properties: ["projectName": stringProp("Name of the project")],
+                    properties: [
+                        "projectName": stringProp("Name of the project"),
+                        "includeArchived": boolProp("When true, include archived done cards in the card list. Default false.")
+                    ],
                     required: ["projectName"]
                 )
             ),
             Tool(
                 name: "search_desk",
-                description: "Search notes, card titles, kinds, and KnowledgeBase markdown. Prefer get_desk_summary first.",
+                description: "Search notes, card titles, kinds, and KnowledgeBase markdown. Archived done cards are included and marked archived. Prefer get_desk_summary first.",
                 inputSchema: objectSchema(
                     properties: ["pattern": stringProp("Keyword to search for")],
                     required: ["pattern"]
@@ -195,31 +211,34 @@ public enum MCPBootstrap {
                         "title": stringProp("Card title"),
                         "column": stringProp("Column (default backlog)"),
                         "memoryRef": stringProp("Optional opaque memory id or tag"),
-                        "linkedPR": stringProp("Optional pull request URL or number")
+                        "linkedPR": stringProp("Optional pull request URL or number"),
+                        "note": stringProp("Optional short evidence line, such as a commit or URL. Blank clears it.")
                     ],
                     required: ["project", "title"]
                 )
             ),
             Tool(
                 name: "move_card",
-                description: "Move a card to another column, then regenerate the desk page.",
+                description: "Move a card to another column, then regenerate the desk page. Leaving done brings an archived card back onto the board.",
                 inputSchema: objectSchema(
                     properties: [
                         "id": stringProp("Card id"),
-                        "column": stringProp("Target column")
+                        "column": stringProp("Target column"),
+                        "note": stringProp("Optional short evidence line, such as a commit or URL. Omit to keep the current note. Blank clears it.")
                     ],
                     required: ["id", "column"]
                 )
             ),
             Tool(
                 name: "update_card",
-                description: "Update card title, column, or memoryRef.",
+                description: "Update card title, column, or memoryRef. Leaving done, or any edit that refreshes updated, brings an archived card back onto the board.",
                 inputSchema: objectSchema(
                     properties: [
                         "id": stringProp("Card id"),
                         "title": stringProp("New title"),
                         "column": stringProp("New column"),
-                        "memoryRef": stringProp("Opaque memory id or tag")
+                        "memoryRef": stringProp("Opaque memory id or tag"),
+                        "note": stringProp("Optional short evidence line, such as a commit or URL. Omit to keep the current note. Blank clears it.")
                     ],
                     required: ["id"]
                 )
@@ -303,7 +322,7 @@ public enum MCPBootstrap {
     ) async throws -> String {
         switch name {
         case "get_desk_summary":
-            return await projectManager.deskSummary()
+            return await projectManager.deskSummary(includeArchived: boolArg(arguments["includeArchived"]))
 
         case "list_projects":
             return try await projectManager.listProjects()
@@ -312,7 +331,10 @@ public enum MCPBootstrap {
             guard let projectName = arguments["projectName"]?.stringValue else {
                 throw CoordinatorError.invalidArguments
             }
-            return try await projectManager.getProjectStatusSecure(projectName: projectName)
+            return try await projectManager.getProjectStatusSecure(
+                projectName: projectName,
+                includeArchived: boolArg(arguments["includeArchived"])
+            )
 
         case "search_desk", "search_code_patterns":
             guard let pattern = arguments["pattern"]?.stringValue else {
@@ -399,7 +421,8 @@ public enum MCPBootstrap {
                 title: title,
                 column: arguments["column"]?.stringValue,
                 memoryRef: arguments["memoryRef"]?.stringValue,
-                linkedPR: arguments["linkedPR"]?.stringValue
+                linkedPR: arguments["linkedPR"]?.stringValue,
+                note: arguments["note"]?.stringValue
             )
 
         case "move_card":
@@ -407,7 +430,11 @@ public enum MCPBootstrap {
                   let column = arguments["column"]?.stringValue else {
                 throw CoordinatorError.invalidArguments
             }
-            return try await projectManager.moveCard(id: id, column: column)
+            return try await projectManager.moveCard(
+                id: id,
+                column: column,
+                note: arguments["note"]?.stringValue
+            )
 
         case "update_card":
             guard let id = arguments["id"]?.stringValue else {
@@ -417,7 +444,8 @@ public enum MCPBootstrap {
                 id: id,
                 title: arguments["title"]?.stringValue,
                 column: arguments["column"]?.stringValue,
-                memoryRef: arguments["memoryRef"]?.stringValue
+                memoryRef: arguments["memoryRef"]?.stringValue,
+                note: arguments["note"]?.stringValue
             )
 
         case "rename_column":

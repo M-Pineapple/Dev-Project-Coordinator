@@ -180,9 +180,20 @@ public actor ProjectManager {
         return result
     }
 
-    public func deskSummary() async -> String {
+    public func deskSummary(includeArchived: Bool = false) async -> String {
         let board = await cardStore.snapshot()
-        return DeskSummary.render(projects: allProjects(), board: board)
+        return DeskSummary.render(
+            projects: allProjects(),
+            board: board,
+            includeArchived: includeArchived,
+            archiveAfter: archiveInterval()
+        )
+    }
+
+    private func archiveInterval() -> TimeInterval {
+        CardArchive.interval(
+            days: CardArchive.days(configDays: securityConfig.archiveDays)
+        )
     }
 
     public func openDesk() async throws -> String {
@@ -190,7 +201,7 @@ public actor ProjectManager {
         return "Desk page: \(url.path)\nOpen that file from disk. Data never leaves this machine."
     }
 
-    func getProjectStatus(projectName: String) async throws -> String {
+    func getProjectStatus(projectName: String, includeArchived: Bool = false) async throws -> String {
         guard let project = projects[projectName] else {
             throw CoordinatorError.projectNotFound
         }
@@ -218,11 +229,35 @@ public actor ProjectManager {
             }
             result += "\n"
         }
+        result += await cardSection(for: project.name, includeArchived: includeArchived)
         if let notes = project.notes {
             result += "## Notes\n\(notes)\n\n"
         }
         result += "**Last Updated**: \(formatDate(project.lastModified))"
         return result
+    }
+
+    private func cardSection(for projectName: String, includeArchived: Bool) async -> String {
+        let board = await cardStore.snapshot()
+        let window = archiveInterval()
+        let now = Date()
+        let mine = board.cards.filter { $0.project == projectName }.sorted { $0.order < $1.order }
+        let archived = mine.filter { $0.isArchived(now: now, archiveAfter: window) }
+        let archivedIDs = Set(archived.map(\.id))
+        let listed = includeArchived ? mine : mine.filter { !archivedIDs.contains($0.id) }
+        var section = "## Cards\n"
+        if listed.isEmpty {
+            section += "None\n"
+        } else {
+            for card in listed {
+                let title = card.title.replacingOccurrences(of: "\n", with: " ")
+                let mark = archivedIDs.contains(card.id) ? " archived" : ""
+                let evidence = card.note.map { " | \($0.replacingOccurrences(of: "\n", with: " "))" } ?? ""
+                section += "- [\(card.column)] \(title) (\(card.id))\(evidence)\(mark)\n"
+            }
+        }
+        section += "\nArchived: \(archived.count)\n\n"
+        return section
     }
 
     func searchCodePatterns(pattern: String) async throws -> String {
@@ -253,8 +288,15 @@ public actor ProjectManager {
         }
 
         let board = await cardStore.snapshot()
-        for card in board.cards where card.title.lowercased().contains(needle) {
-            results.append("Card \(card.id) in \(card.project): \(card.title)")
+        let window = archiveInterval()
+        let now = Date()
+        for card in board.cards {
+            let titleHit = card.title.lowercased().contains(needle)
+            let noteHit = card.note?.lowercased().contains(needle) ?? false
+            guard titleHit || noteHit else { continue }
+            let mark = card.isArchived(now: now, archiveAfter: window) ? " [archived]" : ""
+            let evidence = card.note.map { " (\($0))" } ?? ""
+            results.append("Card \(card.id) in \(card.project): \(card.title)\(evidence)\(mark)")
         }
 
         if results.isEmpty {
@@ -470,7 +512,8 @@ public actor ProjectManager {
         title: String,
         column: String? = nil,
         memoryRef: String? = nil,
-        linkedPR: String? = nil
+        linkedPR: String? = nil,
+        note: String? = nil
     ) async throws -> String {
         guard projects[project] != nil else { throw CoordinatorError.projectNotFound }
         let card = try await cardStore.addCard(
@@ -478,7 +521,8 @@ public actor ProjectManager {
             title: title,
             column: column,
             memoryRef: memoryRef,
-            linkedPR: linkedPR
+            linkedPR: linkedPR,
+            note: note
         )
         if let analytics {
             await analytics.recordActivity(for: project, type: .taskAdded, description: title)
@@ -487,8 +531,8 @@ public actor ProjectManager {
         return "Added card \(card.id) on \(project) in \(card.column)"
     }
 
-    public func moveCard(id: String, column: String) async throws -> String {
-        let card = try await cardStore.moveCard(id: id, column: column)
+    public func moveCard(id: String, column: String, note: String? = nil) async throws -> String {
+        let card = try await cardStore.moveCard(id: id, column: column, note: note)
         try await regenerateDesk()
         return "Moved card \(card.id) to \(card.column)"
     }
@@ -497,9 +541,16 @@ public actor ProjectManager {
         id: String,
         title: String? = nil,
         column: String? = nil,
-        memoryRef: String? = nil
+        memoryRef: String? = nil,
+        note: String? = nil
     ) async throws -> String {
-        let card = try await cardStore.updateCard(id: id, title: title, column: column, memoryRef: memoryRef)
+        let card = try await cardStore.updateCard(
+            id: id,
+            title: title,
+            column: column,
+            memoryRef: memoryRef,
+            note: note
+        )
         try await regenerateDesk()
         return "Updated card \(card.id)"
     }
@@ -732,12 +783,12 @@ public actor ProjectManager {
         }
     }
 
-    public func getProjectStatusSecure(projectName: String) async throws -> String {
+    public func getProjectStatusSecure(projectName: String, includeArchived: Bool = false) async throws -> String {
         if securityConfig.enableValidation {
             let validatedName = try SecurityValidator.validateProjectName(projectName)
-            return try await getProjectStatus(projectName: validatedName)
+            return try await getProjectStatus(projectName: validatedName, includeArchived: includeArchived)
         } else {
-            return try await getProjectStatus(projectName: projectName)
+            return try await getProjectStatus(projectName: projectName, includeArchived: includeArchived)
         }
     }
 

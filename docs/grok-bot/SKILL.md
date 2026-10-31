@@ -11,8 +11,8 @@ Use with the Dev Project Coordinator MCP. Enable on a specialised Grok Bot or pa
 | Agent is in a git repo | `register_from_workspace` |
 | Non-coding work from context | `file_under_project` |
 | Wrong name | `rename_project` or `merge_projects` |
-| New work item | `add_card` |
-| Column change | `move_card` |
+| New work item | `add_card`. Optional `note` is a short evidence line, not memory prose |
+| Column change | `move_card`. Leaving done brings an archived card back |
 | Decision lives in memory | `update_card` with `memoryRef` only |
 | User wants the page | `open_desk` |
 | User asked for drag-and-drop or Add to Dock | `start_desk_server`. Give the one-time sign-in URL (valid once, for 10 minutes), then the plain URL for Dock. Calling the tool again mints a new code without rotating the write token. Do not call the write token one-time |

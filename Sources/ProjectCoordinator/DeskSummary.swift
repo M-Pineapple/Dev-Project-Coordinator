@@ -5,21 +5,32 @@ public enum DeskSummary {
     public static let maxCharacters = 3_200
     public static let tokenBudget = 800
 
-    public static func render(projects: [Project], board: Board, now: Date = Date()) -> String {
+    public static func render(
+        projects: [Project],
+        board: Board,
+        now: Date = Date(),
+        includeArchived: Bool = false,
+        archiveAfter: TimeInterval = CardArchive.defaultInterval
+    ) -> String {
         let staleIDs = staleProjects(projects: projects, board: board, now: now)
+        let archivedIDs = Set(
+            board.cards.filter { $0.isArchived(now: now, archiveAfter: archiveAfter) }.map(\.id)
+        )
         let blocked = board.cards.filter { $0.column.lowercased() == "parked" }.count
-        let done = board.cards.filter { $0.column.lowercased() == "done" }.count
+        let done = board.cards.filter {
+            $0.column.lowercased() == CardArchive.doneColumn && !archivedIDs.contains($0.id)
+        }.count
 
         var columnCounts: [String: Int] = [:]
         for column in board.columns { columnCounts[column] = 0 }
-        for card in board.cards {
+        for card in board.cards where !archivedIDs.contains(card.id) {
             columnCounts[card.column, default: 0] += 1
         }
         let colLine = board.columns.map { "\($0)=\(columnCounts[$0] ?? 0)" }.joined(separator: " ")
 
         var lines: [String] = []
         lines.append(
-            "DPC desk  projects=\(projects.count)  stale=\(staleIDs.count)  blocked=\(blocked)  done=\(done)"
+            "DPC desk  projects=\(projects.count)  stale=\(staleIDs.count)  blocked=\(blocked)  done=\(done)  archived=\(archivedIDs.count)"
         )
         lines.append("cols: \(colLine)")
         lines.append("id   col     kind     tags     age  next")
@@ -29,16 +40,26 @@ public enum DeskSummary {
         for (index, project) in sorted.enumerated() {
             let shortID = String(format: "p%02d", index + 1)
             let cards = board.cards.filter { $0.project == project.name }
-            let col = cards.first.map(\.column) ?? DeskColumns.fromStatus(project.status)
+            let active = cards.filter { !archivedIDs.contains($0.id) }
+            let col = active.first?.column ?? cards.first?.column ?? DeskColumns.fromStatus(project.status)
             let tags = project.techStack.prefix(2).joined(separator: ",")
             let age = ageLabel(since: project.lastModified, now: now)
-            let next = cards.first(where: { $0.column != "done" && $0.column != "parked" })?.title
-                ?? cards.first?.title
-                ?? "-"
+            let nextActive = active.first(where: {
+                $0.column.lowercased() != CardArchive.doneColumn && $0.column.lowercased() != "parked"
+            })?.title ?? active.first?.title
+            let next = nextActive ?? (includeArchived ? cards.first?.title : nil) ?? "-"
             let nextShort = String(next.prefix(24))
             body.append(
                 "\(shortID)  \(pad(col, 7))  \(pad(project.kind.rawValue, 8))  \(pad(tags, 8))  \(pad(age, 4))  \(nextShort)"
             )
+        }
+        if includeArchived {
+            let archived = board.cards
+                .filter { archivedIDs.contains($0.id) }
+                .sorted { $0.updated < $1.updated }
+            for card in archived {
+                body.append("arch  \(card.id)  \(String(card.title.prefix(24)))")
+            }
         }
 
         let staleLine = staleIDs.isEmpty ? "stale: none" : "stale: \(staleIDs.joined(separator: " "))"
