@@ -375,3 +375,27 @@ private func sendRaw(port: UInt16, payload: String) throws -> Data {
     }
     return data
 }
+
+@Test func cardStoreReloadsFromDiskBeforeMutating() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("cardstore-reload-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root.appendingPathComponent("desk"), withIntermediateDirectories: true)
+    let longRunning = CardStore(knowledgeBasePath: root.path)
+    try await longRunning.replaceBoard(Board(columns: DeskColumns.defaults, cards: []))
+    let first = try await longRunning.addCard(project: "Demo", title: "First")
+
+    // Another process changes the file behind the long-running store's back.
+    let other = CardStore(knowledgeBasePath: root.path)
+    await other.load()
+    let second = try await other.addCard(project: "Demo", title: "Second")
+    _ = try await other.moveCard(id: first.id, column: "done")
+
+    // The long-running store must see both changes and keep them when it saves.
+    _ = try await longRunning.moveCard(id: second.id, column: "doing")
+    let check = CardStore(knowledgeBasePath: root.path)
+    await check.load()
+    let cards = await check.snapshot().cards
+    #expect(cards.count == 2)
+    #expect(cards.first { $0.id == first.id }?.column == "done")
+    #expect(cards.first { $0.id == second.id }?.column == "doing")
+}

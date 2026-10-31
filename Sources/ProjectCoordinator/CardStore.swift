@@ -18,6 +18,9 @@ public actor CardStore {
         decoder.dateDecodingStrategy = .iso8601
     }
 
+    /// Re-read from disk. Called before every mutation and snapshot so a long-running
+    /// process (desk server, MCP host) never saves over changes another process made.
+    /// A missing or unreadable file keeps the in-memory board.
     public func load() {
         guard let data = try? Data(contentsOf: fileURL),
               let loaded = try? decoder.decode(Board.self, from: data) else {
@@ -30,7 +33,8 @@ public actor CardStore {
     }
 
     public func snapshot() -> Board {
-        board
+        load()
+        return board
     }
 
     public func save() throws {
@@ -85,6 +89,7 @@ public actor CardStore {
         linkedPR: String? = nil,
         due: Date? = nil
     ) throws -> Card {
+        load()
         let col = column ?? "backlog"
         guard board.columns.contains(col) else {
             throw CoordinatorError.invalidColumn
@@ -115,6 +120,7 @@ public actor CardStore {
     }
 
     public func moveCard(id: String, column: String) throws -> Card {
+        load()
         let trimmedID = try Card.normalizedID(id)
         guard board.columns.contains(column) else {
             throw CoordinatorError.invalidColumn
@@ -136,6 +142,7 @@ public actor CardStore {
         due: Date? = nil,
         linkedPR: String? = nil
     ) throws -> Card {
+        load()
         let trimmedID = try Card.normalizedID(id)
         guard let index = board.cards.firstIndex(where: { $0.id == trimmedID }) else {
             throw CoordinatorError.cardNotFound
@@ -162,6 +169,7 @@ public actor CardStore {
     }
 
     public func renameColumn(from old: String, to newName: String) throws {
+        load()
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw CoordinatorError.invalidColumn }
         guard let index = board.columns.firstIndex(of: old) else {
@@ -175,6 +183,7 @@ public actor CardStore {
     }
 
     public func reassignProject(from oldName: String, to newName: String) throws {
+        load()
         for i in board.cards.indices where board.cards[i].project == oldName {
             board.cards[i].project = newName
             board.cards[i].updated = Date()
