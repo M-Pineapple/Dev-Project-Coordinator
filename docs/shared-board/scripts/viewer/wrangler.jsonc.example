@@ -1,0 +1,8 @@
+{
+  "name": "dpc-board-viewer",
+  "main": "index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": { "GITHUB_REPO": "<owner>/<board-repo>", "GITHUB_REF": "main", "GITHUB_API": "https://api.github.com" }
+}

@@ -318,6 +318,10 @@ Templates do not carry this server. After import, add a custom MCP named `dpc` (
 
 On Grok Bot's cloud computer, sibling bots can read files. Prefer local-computer execution, or the Linux Docker image with `DPC_KNOWLEDGE_BASE` on that disk.
 
+## Shared board (optional)
+
+If the user wants one board shared between your computer and their desktop, or readable by another assistant, offer the optional shared-board setup: a private GitHub repo as transport, a locked wrapper on your side, a two-way mirror on their desktop, and an optional read-only viewer. Follow docs/shared-board/README.md in the DPC repo step by step and do not improvise your own sync. Never put a token or key in a card, note, or message.
+
 ## Anti-jobs
 
 - Do not implement Trello, Asana, or Jira.
@@ -333,6 +337,8 @@ The matching skill is in [docs/grok-bot/SKILL.md](docs/grok-bot/SKILL.md).
 Templates cannot include this server. After you paste [docs/grok-bot/PROMPT.md](docs/grok-bot/PROMPT.md), tell the bot to add a custom MCP that runs the binary. On the bot cloud computer, sibling bots can read files. Prefer local execution, or the Docker image with `DPC_KNOWLEDGE_BASE` on that disk.
 
 Optional: set `DPC_KNOWLEDGE_BASE` (or legacy `CPC_KNOWLEDGE_BASE`) to a custom KnowledgeBase directory.
+
+Optional: to share one board between a Linux host (such as a Grok Bot's computer) and your desktop, see the [shared board guide](docs/shared-board/README.md).
 
 Restart the host after changing the config.
 

@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+"""dpc: call Dev Project Coordinator tools on a shared board host.
+
+Usage:  dpc tools
+        dpc <tool_name> '<json args>'
+        dpc sync      (push the board to GitHub now)
+Writes and reads are serialised with an flock on $KB/.dpc.lock.
+Before each call it commits local work and pulls origin/main (fast-forward or
+rebase, throttled). After a write it commits and pushes in the background; a failed
+push leaves $KB/.dpc-sync.pending. Push auth: DPC_BOARD_GITHUB_TOKEN (fine-grained,
+Contents read/write on the board repo only) via an inline credential helper.
+
+Environment: DPC_ROOT (default ~/dpc), DPC_BIN, DPC_KNOWLEDGE_BASE.
+"""
+import fcntl, json, os, subprocess, sys, time
+
+ROOT = os.environ.get("DPC_ROOT", os.path.expanduser("~/dpc"))
+BIN = os.environ.get("DPC_BIN", ROOT + "/bin/project-coordinator")
+KB = os.environ.get("DPC_KNOWLEDGE_BASE", ROOT + "/kb")
+TIMEOUT = 60
+WRITE_TOOLS = {"add_project", "update_project_status", "add_card", "move_card",
+               "update_card", "rename_column", "register_from_workspace",
+               "file_under_project", "rename_project", "merge_projects"}
+PENDING = os.path.join(KB, ".dpc-sync.pending")
+CRED = ("credential.helper=!f(){ echo username=x-access-token; "
+        "echo \"password=$DPC_BOARD_GITHUB_TOKEN\"; };f")
+
+
+def git(*a, timeout=60):
+    return subprocess.run(["git", "-C", KB, "-c", "credential.helper=", "-c", CRED] + list(a),
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                          timeout=timeout, env=dict(os.environ, GIT_TERMINAL_PROMPT="0")).returncode
+
+
+FETCH_STAMP = os.path.join(KB, ".dpc-sync.fetched")
+FETCH_EVERY = 15  # seconds; pre-call pulls are throttled to this
+
+
+def git_ok(*a, timeout=60):
+    return git(*a, timeout=timeout) == 0
+
+
+def commit_local():
+    git("add", "-A")
+    if git("diff", "--cached", "--quiet") != 0:
+        git("commit", "-q", "-m", "board update")
+
+
+def integrate(force=False):
+    """Caller holds the board lock. Commit local work, then bring in origin/main
+    (Mac Dock edits) by fast-forward or rebase. cards.json conflicts are resolved
+    by the dpccards merge driver (newest card wins, no card dropped)."""
+    if not os.path.isdir(os.path.join(KB, ".git")) or not os.environ.get("DPC_BOARD_GITHUB_TOKEN"):
+        return
+    try:
+        if not force and time.time() - os.path.getmtime(FETCH_STAMP) < FETCH_EVERY:
+            return
+    except OSError:
+        pass
+    commit_local()
+    if git("fetch", "-q", "origin", "main", timeout=30) != 0:
+        return
+    with open(FETCH_STAMP, "w"):
+        pass
+    if git_ok("merge-base", "--is-ancestor", "origin/main", "HEAD"):
+        return
+    if git_ok("merge-base", "--is-ancestor", "HEAD", "origin/main"):
+        git("merge", "-q", "--ff-only", "origin/main")
+        return
+    if git("rebase", "-q", "origin/main", timeout=60) != 0:
+        git("rebase", "--abort")
+        with open(PENDING, "w") as f:
+            f.write("rebase onto origin/main failed; local commits kept, needs a look\n")
+
+
+def sync():
+    """Commit and integrate under the board lock, push under the sync lock. Never raises."""
+    try:
+        if not os.path.isdir(os.path.join(KB, ".git")):
+            return 0
+        reason, rc = "", 1
+        for attempt in range(3):
+            with open(os.path.join(KB, ".dpc.lock"), "a") as lk:
+                fcntl.flock(lk, fcntl.LOCK_EX)
+                commit_local()
+                integrate(force=True)
+            with open(os.path.join(KB, ".dpc-sync.lock"), "a") as sl:
+                fcntl.flock(sl, fcntl.LOCK_EX)
+                if not os.environ.get("DPC_BOARD_GITHUB_TOKEN"):
+                    reason = "DPC_BOARD_GITHUB_TOKEN not set in this caller's environment"
+                    rc = 1
+                    break
+                rc = git("push", "-q", "origin", "main", timeout=120)
+                reason = "git push exit %d" % rc
+            if rc == 0:
+                break
+            time.sleep(2)
+        if rc == 0:
+            if os.path.exists(PENDING):
+                os.remove(PENDING)
+        else:
+            with open(PENDING, "w") as f:
+                f.write("%s\n" % reason)
+    except Exception as e:
+        try:
+            with open(PENDING, "w") as f:
+                f.write("sync error: %s\n" % type(e).__name__)
+        except Exception:
+            pass
+    return 0
+
+
+def spawn_sync():
+    try:
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), "__sync"],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True)
+    except Exception:
+        pass
+
+
+def rpc(requests):
+    env = dict(os.environ, DPC_KNOWLEDGE_BASE=KB)
+    payload = "".join(json.dumps(r) + "\n" for r in requests)
+    p = subprocess.Popen([BIN], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, env=env, text=True)
+    want = {r["id"] for r in requests if "id" in r}
+    got = {}
+    p.stdin.write(payload); p.stdin.flush()
+    try:
+        for line in p.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if msg.get("id") in want:
+                got[msg["id"]] = msg
+                if len(got) == len(want):
+                    break
+    finally:
+        try:
+            p.stdin.close()
+        except Exception:
+            pass
+        try:
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            p.kill()
+    return got
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "__sync":
+        return sync()
+    if len(sys.argv) > 1 and sys.argv[1] == "sync":
+        sync()
+        if os.path.exists(PENDING):
+            print("dpc: sync pending: " + open(PENDING).read().strip(), file=sys.stderr); return 1
+        print("dpc: board pushed"); return 0
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print(__doc__.strip()); return 2
+    init = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2025-03-26", "capabilities": {},
+        "clientInfo": {"name": "dpc-wrapper", "version": "1.0"}}}
+    note = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+    if sys.argv[1] == "tools":
+        call = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+    else:
+        try:
+            args = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+        except ValueError as e:
+            print("dpc: bad JSON args: %s" % e, file=sys.stderr); return 2
+        call = {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                "params": {"name": sys.argv[1], "arguments": args}}
+    os.makedirs(KB, exist_ok=True)
+    with open(os.path.join(KB, ".dpc.lock"), "a") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try:
+            integrate()
+        except Exception:
+            pass
+        got = rpc([init, note, call])
+    res = got.get(2)
+    if res is None:
+        print("dpc: no response from server", file=sys.stderr); return 1
+    if "error" in res:
+        print("dpc: %s" % res["error"].get("message", res["error"]), file=sys.stderr); return 1
+    r = res["result"]
+    if sys.argv[1] == "tools":
+        for t in r.get("tools", []):
+            print("%s: %s" % (t["name"], (t.get("description") or "").split("\n")[0]))
+        return 0
+    text = "\n".join(c.get("text", "") for c in r.get("content", []) if c.get("type") == "text")
+    if r.get("isError"):
+        print(text, file=sys.stderr); return 1
+    print(text)
+    if sys.argv[1] in WRITE_TOOLS or os.path.exists(PENDING):
+        spawn_sync()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
