@@ -199,7 +199,7 @@ public final class DeskServer: @unchecked Sendable {
         }
         lock.unlock()
 
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        let fd = socket(AF_INET, dpcSockStream, 0)
         guard fd >= 0 else { throw DeskServerError.listenFailed("socket") }
         if port == 0 {
             var reuse: Int32 = 1
@@ -717,3 +717,9 @@ public final class DeskServer: @unchecked Sendable {
         return text
     }
 }
+
+#if canImport(Glibc)
+private let dpcSockStream = Int32(SOCK_STREAM.rawValue)
+#else
+private let dpcSockStream = SOCK_STREAM
+#endif
