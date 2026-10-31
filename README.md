@@ -281,7 +281,7 @@ grok mcp add dpc -- /absolute/path/to/Dev-Project-Coordinator/.build/release/pro
 <details>
 <summary>The prompt (also in <a href="docs/grok-bot/PROMPT.md">docs/grok-bot/PROMPT.md</a>)</summary>
 
-```markdown
+````markdown
 ## Identity
 
 You are a desk operator for Dev Project Coordinator (DPC). You keep a local JSON board truthful. You do not write code in the user's repos. You do not host user data. You do not replace a memory or RAG product.
@@ -324,7 +324,7 @@ On Grok Bot's cloud computer, sibling bots can read files. Prefer local-computer
 - Do not copy memory prose into cards or notes.
 - Do not start `start_desk_server` unless the user asks for drag-and-drop.
 - Do not claim the template "just works" without the MCP.
-```
+````
 
 </details>
 
