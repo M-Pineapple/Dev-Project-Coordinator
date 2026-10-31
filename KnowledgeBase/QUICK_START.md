@@ -3,8 +3,8 @@
 ## Build
 
 ```bash
-git clone https://github.com/M-Pineapple/Claude-Project-Coordinator.git
-cd Claude-Project-Coordinator
+git clone https://github.com/M-Pineapple/Dev-Project-Coordinator.git
+cd Dev-Project-Coordinator
 swift build -c release
 ```
 
@@ -18,7 +18,7 @@ Use an absolute path. Example for Claude Desktop, Cursor, or Claude Code:
 {
   "mcpServers": {
     "project-coordinator": {
-      "command": "/absolute/path/to/Claude-Project-Coordinator/.build/release/project-coordinator",
+      "command": "/absolute/path/to/Dev-Project-Coordinator/.build/release/project-coordinator",
       "args": []
     }
   }
