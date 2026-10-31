@@ -10,6 +10,7 @@ public enum DeskServerError: LocalizedError, Sendable, Equatable {
     case listenFailed(String)
     case alreadyRunning
     case tokenFileFailed
+    case portInUse(UInt16)
 
     public var errorDescription: String? {
         switch self {
@@ -21,6 +22,8 @@ public enum DeskServerError: LocalizedError, Sendable, Equatable {
             return "Desk server is already running"
         case .tokenFileFailed:
             return "Desk server could not write the write-token file"
+        case .portInUse(let port):
+            return "Desk port \(port) is already in use. Stop the other process or set DPC_DESK_PORT / security-config deskPort."
         }
     }
 }
@@ -45,7 +48,7 @@ public struct HTTPResponse: Sendable {
     public var body: Data
 
     public static let securityHeaders: [String: String] = [
-        "Content-Security-Policy": "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; connect-src 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff"
     ]
 
@@ -84,6 +87,29 @@ public struct HTTPResponse: Sendable {
         return HTTPResponse(status: 200, reason: "OK", headers: headers, body: data)
     }
 
+    public static func redirect(location: String, setCookie: String? = nil) -> HTTPResponse {
+        var headers = [
+            "Location": location,
+            "Content-Length": "0",
+            "Cache-Control": "no-store"
+        ]
+        if let setCookie { headers["Set-Cookie"] = setCookie }
+        return HTTPResponse(status: 303, reason: "See Other", headers: headers, body: Data())
+    }
+
+    public static func bytes(_ body: Data, contentType: String) -> HTTPResponse {
+        HTTPResponse(
+            status: 200,
+            reason: "OK",
+            headers: [
+                "Content-Type": contentType,
+                "Content-Length": String(body.count),
+                "Cache-Control": "no-store"
+            ],
+            body: body
+        )
+    }
+
     public static func json(_ status: Int, _ reason: String, _ body: String) -> HTTPResponse {
         let data = Data(body.utf8)
         return HTTPResponse(
@@ -103,10 +129,11 @@ public struct HTTPResponse: Sendable {
 public final class DeskServer: @unchecked Sendable {
     public static let maxBodyBytes = 65_536
     public static let socketTimeoutSeconds: Int = 5
+    public static let defaultPort: UInt16 = 47_821
 
     public let bindHost: String
     public private(set) var port: UInt16
-    public let token: String
+    public private(set) var token: String
     public let tokenFileURL: URL
     private let htmlProvider: @Sendable () -> String
     private let onMove: @Sendable (String, String) throws -> Void
@@ -157,8 +184,10 @@ public final class DeskServer: @unchecked Sendable {
 
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else { throw DeskServerError.listenFailed("socket") }
-        var reuse: Int32 = 1
-        _ = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout.size(ofValue: reuse)))
+        if port == 0 {
+            var reuse: Int32 = 1
+            _ = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout.size(ofValue: reuse)))
+        }
 
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
@@ -171,7 +200,11 @@ public final class DeskServer: @unchecked Sendable {
             }
         }
         guard bindResult == 0 else {
+            let code = errno
             close(fd)
+            if port != 0 && code == EADDRINUSE {
+                throw DeskServerError.portInUse(port)
+            }
             throw DeskServerError.listenFailed("bind")
         }
         guard listen(fd, 16) == 0 else {
@@ -213,6 +246,61 @@ public final class DeskServer: @unchecked Sendable {
         handle(request)
     }
 
+    public func rotateToken() throws {
+        let newToken = Self.randomToken()
+        try Self.writeTokenFile(token: newToken, url: tokenFileURL)
+        lock.lock()
+        token = newToken
+        lock.unlock()
+    }
+
+    public var plainURL: String {
+        "http://127.0.0.1:\(port)/"
+    }
+
+    public var signInURL: String {
+        "http://127.0.0.1:\(port)/?token=\(currentToken())"
+    }
+
+    private func currentToken() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return token
+    }
+
+    public static func resolvePort(
+        configPort: UInt16? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> UInt16 {
+        if let raw = environment["DPC_DESK_PORT"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let parsed = UInt16(raw), parsed > 0 {
+            return parsed
+        }
+        if let configPort, configPort > 0 {
+            return configPort
+        }
+        return defaultPort
+    }
+
+    public static func tokenCookie(_ token: String) -> String {
+        "dpc_token=\(token); Path=/; HttpOnly; SameSite=Strict"
+    }
+
+    public static func splitPathAndQuery(_ raw: String) -> (path: String, query: [String: String]) {
+        let parts = raw.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        let path = String(parts[0])
+        var query: [String: String] = [:]
+        if parts.count == 2 {
+            for pair in parts[1].split(separator: "&") {
+                let kv = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                let key = String(kv[0]).removingPercentEncoding ?? String(kv[0])
+                let value = kv.count > 1 ? (String(kv[1]).removingPercentEncoding ?? String(kv[1])) : ""
+                query[key] = value
+            }
+        }
+        return (path, query)
+    }
+
     private func acceptLoop() {
         while isRunning {
             var addr = sockaddr_in()
@@ -249,12 +337,43 @@ public final class DeskServer: @unchecked Sendable {
         }
 
         let method = request.method.uppercased()
-        if method == "GET" && (request.path == "/" || request.path.hasPrefix("/index")) {
-            let cookie = "dpc_token=\(token); Path=/; HttpOnly; SameSite=Strict"
-            return HTTPResponse.html(htmlProvider(), setCookie: cookie)
-        }
-        if method == "GET" && request.path == "/health" {
-            return HTTPResponse.text(200, "OK", "ok")
+        let parsed = Self.splitPathAndQuery(request.path)
+        let path = parsed.path
+        let query = parsed.query
+
+        if method == "GET" {
+            if path == "/" || path == "/index" || path == "/index.html" {
+                if let presented = query["token"] {
+                    let current = currentToken()
+                    guard Self.tokensEqual(presented, current) else {
+                        return HTTPResponse.text(401, "Unauthorized", "bad token")
+                    }
+                    return HTTPResponse.redirect(location: "/", setCookie: Self.tokenCookie(current))
+                }
+                return HTTPResponse.html(htmlProvider())
+            }
+            if path == "/health" {
+                return HTTPResponse.text(200, "OK", "ok")
+            }
+            if path == "/manifest.webmanifest" {
+                let body = Data(DeskAssets.manifestJSON().utf8)
+                return HTTPResponse.bytes(body, contentType: "application/manifest+json; charset=utf-8")
+            }
+            if path == "/icon-180.png", let png = DeskAssets.pngIcon(size: 180) {
+                return HTTPResponse.bytes(png, contentType: "image/png")
+            }
+            if path == "/icon-192.png", let png = DeskAssets.pngIcon(size: 192) {
+                return HTTPResponse.bytes(png, contentType: "image/png")
+            }
+            if path == "/icon-512.png", let png = DeskAssets.pngIcon(size: 512) {
+                return HTTPResponse.bytes(png, contentType: "image/png")
+            }
+            if path == "/icon.svg" {
+                return HTTPResponse.bytes(Data(DeskAssets.logoLightSVG.utf8), contentType: "image/svg+xml; charset=utf-8")
+            }
+            if path == "/favicon.svg" {
+                return HTTPResponse.bytes(Data(DeskAssets.faviconSVG.utf8), contentType: "image/svg+xml; charset=utf-8")
+            }
         }
         if method == "OPTIONS" {
             return HTTPResponse(
@@ -308,7 +427,7 @@ public final class DeskServer: @unchecked Sendable {
             return HTTPResponse.text(403, "Forbidden", "host rejected")
         }
         let presented = presentedToken(request)
-        guard let presented, Self.tokensEqual(presented, token) else {
+        guard let presented, Self.tokensEqual(presented, currentToken()) else {
             if presented == nil {
                 return HTTPResponse.text(401, "Unauthorized", "missing token")
             }

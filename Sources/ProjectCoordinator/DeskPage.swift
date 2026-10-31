@@ -32,7 +32,7 @@ public enum DeskPage {
             timeline: timeline,
             now: now
         )
-        let kanban = kanbanBoard(projects: projects, board: board, mode: mode)
+        let kanban = kanbanBoard(projects: projects, board: board, mode: mode, now: now)
         let script = mode == .live ? liveScript() : tabScript()
         return """
         <!DOCTYPE html>
@@ -41,14 +41,21 @@ public enum DeskPage {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Dev Project Coordinator desk</title>
+        \(DeskAssets.headMarkup(mode: mode))
         <style>\(styles)</style>
         </head>
         <body>
         <div class="grain" aria-hidden="true"></div>
         <header>
+        <div class="brand">
+        \(DeskAssets.logoLightSVG)
+        \(DeskAssets.logoDarkSVG)
+        <div>
         <p class="eyebrow">Local desk</p>
         <h1>Dev Project Coordinator</h1>
-        <p class="sub">Analytics and Kanban from JSON on this machine. Nothing leaves the box.</p>
+        </div>
+        </div>
+        <p class="sub">Analytics and Kanban from local JSON. Nothing leaves this machine.</p>
         </header>
         <nav role="tablist">
         <button role="tab" id="tab-analytics" aria-selected="true" aria-controls="panel-analytics">Analytics</button>
@@ -153,8 +160,11 @@ public enum DeskPage {
     .dash-split .card { margin:0; display:flex; flex-direction:column; }
     @media (max-width:900px) { .dash-split { grid-template-columns:1fr; } }
     header { padding:1.6rem 1.6rem .4rem; position:relative; }
+    .brand { display:flex; align-items:center; gap:.85rem; margin:0 0 .35rem; }
+    .logo { width:2.7rem; height:2.7rem; flex:none; border-radius:.72rem; display:block; }
+    .logo-dark { display:none; }
     .eyebrow { letter-spacing:.16em; text-transform:uppercase; font-size:.68rem; color:var(--accent); margin:0 0 .35rem; }
-    h1 { font-size:1.85rem; font-weight:650; margin:0 0 .35rem; letter-spacing:-.03em; }
+    h1 { font-size:1.85rem; font-weight:650; margin:0; letter-spacing:-.03em; }
     h2 { font-size:1.05rem; margin:0 0 .7rem; letter-spacing:-.01em; }
     .sub { color:var(--muted); margin:0 0 1rem; max-width:40rem; }
     nav { display:flex; gap:.5rem; padding:0 1.6rem; border-bottom:1px solid var(--line); position:relative; }
@@ -178,10 +188,37 @@ public enum DeskPage {
     th, td { text-align:left; padding:.42rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
     th { font-size:.75rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); font-weight:600; }
     .board { display:flex; gap:.75rem; overflow-x:auto; align-items:stretch; padding-bottom:.35rem; }
-    .col { min-width:15.5rem; min-height:12rem; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.65rem; }
-    .col h3 { margin:0 0 .5rem; font-size:.95rem; display:flex; justify-content:space-between; gap:.5rem; }
-    .kcard { border:1px solid var(--line); border-radius:8px; padding:.5rem; margin:0 0 .5rem; background:var(--bg); }
-    .kcard small { color:var(--muted); display:block; }
+    .col { min-width:15.5rem; min-height:12rem; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.65rem; border-top:3px solid var(--col-accent, var(--muted)); }
+    .col h3 { margin:0 0 .5rem; font-size:.95rem; display:flex; justify-content:space-between; align-items:center; gap:.5rem; }
+    .col[data-accent="0"] { --col-accent: var(--muted); }
+    .col[data-accent="1"] { --col-accent: var(--accent); }
+    .col[data-accent="2"] { --col-accent: var(--review); }
+    .col[data-accent="3"] { --col-accent: var(--done); }
+    .col[data-accent="4"] { --col-accent: var(--accent-2); }
+    .col.drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
+    .count-pill { font-size:.72rem; font-variant-numeric:tabular-nums; min-width:1.4rem; text-align:center; border-radius:999px; padding:.12rem .45rem; background:var(--bg); border:1px solid var(--line); color:var(--ink); }
+    .kcard { border:1px solid var(--line); border-radius:8px; padding:.55rem .6rem .5rem; margin:0 0 .5rem; background:var(--bg); transition: transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s cubic-bezier(.22,1,.36,1); }
+    .kcard[draggable="true"] { cursor:grab; }
+    .kcard:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    .kcard.lifting { transform: rotate(-9deg) scale(1.04); box-shadow: 0 22px 36px -16px rgba(28,25,20,.5); z-index:2; }
+    .kcard-ph { border:1.5px dashed var(--accent); border-radius:8px; min-height:3.1rem; margin:0 0 .5rem; background:color-mix(in oklab, var(--accent) 10%, transparent); }
+    .kcard strong { display:block; }
+    .kmeta { display:flex; flex-wrap:wrap; gap:.3rem; margin:.4rem 0 0; align-items:center; }
+    .kchip { border:1px solid var(--line); border-radius:999px; padding:.1rem .45rem; font-size:.72rem; background:var(--card); color:var(--ink); text-decoration:none; }
+    .kchip.kind-coding { background:color-mix(in oklab, var(--accent) 18%, var(--card)); }
+    .kchip.kind-writing { background:color-mix(in oklab, var(--review) 18%, var(--card)); }
+    .kchip.kind-campaign { background:color-mix(in oklab, var(--accent-2) 18%, var(--card)); }
+    .kchip.kind-research { background:color-mix(in oklab, var(--done) 18%, var(--card)); }
+    .kchip.kind-legal { background:color-mix(in oklab, var(--review) 22%, var(--card)); }
+    .kchip.kind-accounting { background:color-mix(in oklab, var(--warn) 18%, var(--card)); }
+    .kchip.kind-business { background:color-mix(in oklab, var(--accent) 12%, var(--card)); }
+    .kchip.kind-personal { background:color-mix(in oklab, var(--done) 14%, var(--card)); }
+    .kchip.kind-other { background:var(--card); }
+    .kchip.kpr { border-color:color-mix(in oklab, var(--review) 45%, var(--line)); }
+    .kchip.kref { border-color:color-mix(in oklab, var(--accent) 45%, var(--line)); }
+    .ktime { color:var(--muted); font-size:.72rem; margin-left:.1rem; }
+    .toast { position:fixed; bottom:1.2rem; left:50%; transform:translateX(-50%) translateY(8px); background:var(--ink); color:var(--bg); padding:.45rem .85rem; border-radius:8px; font-size:.85rem; opacity:0; pointer-events:none; transition:opacity .25s cubic-bezier(.22,1,.36,1), transform .25s cubic-bezier(.22,1,.36,1); z-index:20; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
     .flow { display:flex; height:.85rem; border-radius:99px; overflow:hidden; background:var(--line); margin:.35rem 0 .8rem; }
     .flow i { display:block; height:100%; transform-origin:left; animation:grow .8s cubic-bezier(.22,1,.36,1) both; }
     .flow i.c0, .swatch.c0 { background:#6a6458; background:var(--muted); }
@@ -266,6 +303,9 @@ public enum DeskPage {
       .heat-row, .heat-head { grid-template-columns:4.8rem 1fr 1.8rem; }
     }
     @media (prefers-color-scheme: dark) {
+      .logo-light { display:none; }
+      .logo-dark { display:block; }
+      .kcard.lifting { box-shadow: 0 22px 36px -14px rgba(0,0,0,.7); }
       .g-bg { stroke:#3a362c; }
       .g-fg { stroke:#8fbfb0; }
       .gauge.critical .g-fg { stroke:#e07a6e; }
@@ -613,35 +653,79 @@ public enum DeskPage {
         """
     }
 
-    private static func kanbanBoard(projects: [Project], board: Board, mode: DeskPageMode) -> String {
+    private static func kanbanBoard(projects: [Project], board: Board, mode: DeskPageMode, now: Date) -> String {
         let hint: String
         switch mode {
         case .file:
             hint = "<p class=\"note\">Read-only file. Ask the agent to move a card, or start the optional localhost desk server for drag-and-drop.</p>"
         case .live:
-            hint = "<p class=\"note\">Drag a card onto another column. Writes stay on this machine.</p>"
+            hint = "<p class=\"note\">Drag a card, or focus it and use arrow keys then Enter. Writes stay on this machine.</p>"
         }
+        let kindByProject = Dictionary(uniqueKeysWithValues: projects.map { ($0.name, $0.kind) })
         var columnsHTML = ""
-        for column in board.columns {
+        for (index, column) in board.columns.enumerated() {
             let cards = board.cards.filter { $0.column == column }.sorted { $0.order < $1.order }
             let cardsHTML: String
             if cards.isEmpty {
-                cardsHTML = "<p class=\"empty\">Empty</p>"
+                cardsHTML = "<p class=\"empty\">No cards in this column.</p>"
             } else {
                 cardsHTML = cards.map { card in
-                    let title = HTMLEscape.escape(card.title)
-                    let project = HTMLEscape.escape(card.project)
-                    let id = HTMLEscape.escape(card.id)
-                    let ref = card.memoryRef.map { "<small>memoryRef \(HTMLEscape.escape($0))</small>" } ?? ""
-                    let draggable = mode == .live ? " draggable=\"true\" data-id=\"\(id)\"" : ""
-                    return "<article class=\"kcard\"\(draggable)><strong>\(title)</strong><small>\(project) · \(id)</small>\(ref)</article>"
+                    kanbanCard(card, kind: kindByProject[card.project] ?? .other, mode: mode, now: now)
                 }.joined()
             }
             let drop = mode == .live ? " data-column=\"\(HTMLEscape.escape(column))\"" : ""
-            columnsHTML += "<section class=\"col\"\(drop)><h3>\(HTMLEscape.escape(column)) · \(cards.count)</h3>\(cardsHTML)</section>"
+            columnsHTML += """
+            <section class="col" data-accent="\(index % 5)"\(drop)>
+            <h3>\(HTMLEscape.escape(column)) <span class="count-pill">\(cards.count)</span></h3>
+            \(cardsHTML)
+            </section>
+            """
         }
         let names = projects.map { HTMLEscape.escape($0.name) }.joined(separator: ", ")
         return "\(hint)<div class=\"board\">\(columnsHTML)</div><p class=\"note\">Projects: \(names)</p>"
+    }
+
+    private static func kanbanCard(_ card: Card, kind: ProjectKind, mode: DeskPageMode, now: Date) -> String {
+        let title = HTMLEscape.escape(card.title)
+        let id = HTMLEscape.escape(card.id)
+        let project = HTMLEscape.escape(card.project)
+        let liveAttrs = mode == .live
+            ? " draggable=\"true\" tabindex=\"0\" data-id=\"\(id)\""
+            : " data-id=\"\(id)\""
+        var chips = "<span class=\"kchip kind-\(kind.rawValue)\">\(project)</span>"
+        if let linked = card.linkedPR, !linked.isEmpty {
+            chips += prChip(linked)
+        }
+        if let ref = card.memoryRef, !ref.isEmpty {
+            chips += "<span class=\"kchip kref\">\(HTMLEscape.escape(ref))</span>"
+        }
+        chips += "<span class=\"ktime\">\(HTMLEscape.escape(relativeUpdated(card.updated, now: now)))</span>"
+        return "<article class=\"kcard\" title=\"\(id)\"\(liveAttrs)><strong>\(title)</strong><div class=\"kmeta\">\(chips)</div></article>"
+    }
+
+    private static func prChip(_ linkedPR: String) -> String {
+        let trimmed = linkedPR.trimmingCharacters(in: .whitespacesAndNewlines)
+        let last = trimmed.split(separator: "/").last.map(String.init) ?? trimmed
+        let label = last.allSatisfy(\.isNumber) ? "PR \(last)" : (trimmed.lowercased().hasPrefix("pr") ? trimmed : "PR \(trimmed)")
+        let escapedLabel = HTMLEscape.escape(label)
+        if let url = URL(string: trimmed), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+            return "<a class=\"kchip kpr\" href=\"\(HTMLEscape.escape(trimmed))\">\(escapedLabel)</a>"
+        }
+        return "<span class=\"kchip kpr\">\(escapedLabel)</span>"
+    }
+
+    private static func relativeUpdated(_ date: Date, now: Date) -> String {
+        let seconds = now.timeIntervalSince(date)
+        if seconds < 45 { return "just now" }
+        if seconds < 90 { return "1 min ago" }
+        if seconds < 3600 {
+            return "\(Int(seconds / 60)) min ago"
+        }
+        if seconds < 5400 { return "1 hour ago" }
+        if seconds < 86_400 {
+            return "\(Int(seconds / 3600)) hours ago"
+        }
+        return AnalyticsEngine.daysAgoPhrase(Int(seconds / 86_400))
     }
 
     private static func attentionItems(projects: [Project], board: Board, now: Date) -> [String] {
@@ -705,17 +789,113 @@ public enum DeskPage {
 
     private static func liveScript() -> String {
         tabScript() + """
+        const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const toastEl=document.createElement('div');
+        toastEl.className='toast';
+        toastEl.setAttribute('role','status');
+        document.body.appendChild(toastEl);
+        function toast(msg){
+          toastEl.textContent=msg;
+          toastEl.classList.add('show');
+          clearTimeout(toastEl._t);
+          toastEl._t=setTimeout(()=>toastEl.classList.remove('show'), 2200);
+        }
+        function columnOf(card){ return card.closest('.col'); }
+        function updateCounts(){
+          document.querySelectorAll('.col[data-column]').forEach(col=>{
+            const n=col.querySelectorAll('.kcard').length;
+            const pill=col.querySelector('.count-pill');
+            if(pill) pill.textContent=String(n);
+            let empty=col.querySelector('.empty');
+            if(n===0 && !empty){
+              empty=document.createElement('p');
+              empty.className='empty';
+              empty.textContent='No cards in this column.';
+              col.appendChild(empty);
+            }
+            if(n>0 && empty) empty.remove();
+          });
+        }
+        async function moveCard(card, column){
+          const id=card.dataset.id;
+          const from=columnOf(card);
+          const next=card.nextElementSibling;
+          const dest=document.querySelector('.col[data-column="'+CSS.escape(column)+'"]');
+          if(!dest || !from) return;
+          dest.querySelectorAll('.kcard-ph').forEach(p=>p.remove());
+          dest.appendChild(card);
+          updateCounts();
+          try{
+            const res=await fetch('/api/cards/move',{method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, column})});
+            if(!res.ok) throw new Error(await res.text());
+          }catch(err){
+            if(next && next.parentNode===from) from.insertBefore(card, next);
+            else from.appendChild(card);
+            updateCounts();
+            toast('Move failed. Card returned.');
+          }
+        }
+        let dragCard=null;
         document.querySelectorAll('.kcard[draggable]').forEach(card=>{
-          card.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/plain', card.dataset.id); });
+          card.addEventListener('dragstart',e=>{
+            dragCard=card;
+            e.dataTransfer.setData('text/plain', card.dataset.id);
+            e.dataTransfer.effectAllowed='move';
+            if(!reduce) card.classList.add('lifting');
+          });
+          card.addEventListener('dragend',()=>{
+            card.classList.remove('lifting');
+            document.querySelectorAll('.kcard-ph').forEach(p=>p.remove());
+            dragCard=null;
+          });
+          card.addEventListener('keydown',e=>{
+            const cols=[...document.querySelectorAll('.col[data-column]')];
+            const col=columnOf(card);
+            const ci=cols.indexOf(col);
+            const list=[...col.querySelectorAll('.kcard')];
+            const ri=list.indexOf(card);
+            if(e.key==='ArrowDown'){ e.preventDefault(); (list[ri+1]||list[0]).focus(); }
+            if(e.key==='ArrowUp'){ e.preventDefault(); (list[ri-1]||list[list.length-1]).focus(); }
+            if(e.key==='ArrowLeft' || e.key==='ArrowRight'){
+              e.preventDefault();
+              const dest=cols[ci+(e.key==='ArrowRight'?1:-1)];
+              if(!dest) return;
+              card.dataset.pending=dest.dataset.column;
+              cols.forEach(c=>c.classList.toggle('drop-target', c===dest));
+              toast('Enter to move to '+dest.dataset.column);
+            }
+            if(e.key==='Enter' && card.dataset.pending){
+              e.preventDefault();
+              const destCol=card.dataset.pending;
+              delete card.dataset.pending;
+              cols.forEach(c=>c.classList.remove('drop-target'));
+              moveCard(card, destCol);
+            }
+            if(e.key==='Escape'){
+              delete card.dataset.pending;
+              cols.forEach(c=>c.classList.remove('drop-target'));
+            }
+          });
         });
         document.querySelectorAll('.col[data-column]').forEach(col=>{
-          col.addEventListener('dragover',e=>e.preventDefault());
-          col.addEventListener('drop',async e=>{
+          col.addEventListener('dragover',e=>{
+            e.preventDefault();
+            if(!dragCard) return;
+            let ph=col.querySelector('.kcard-ph');
+            if(!ph){ ph=document.createElement('div'); ph.className='kcard-ph'; ph.setAttribute('aria-hidden','true'); }
+            col.appendChild(ph);
+          });
+          col.addEventListener('dragleave',e=>{
+            if(!col.contains(e.relatedTarget)){
+              const ph=col.querySelector('.kcard-ph');
+              if(ph) ph.remove();
+            }
+          });
+          col.addEventListener('drop',e=>{
             e.preventDefault();
             const id=e.dataTransfer.getData('text/plain');
-            const body=JSON.stringify({id, column: col.dataset.column});
-            const res=await fetch('/api/cards/move',{method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body});
-            if(res.ok) location.reload();
+            const card=document.querySelector('.kcard[data-id="'+CSS.escape(id)+'"]');
+            if(card) moveCard(card, col.dataset.column);
           });
         });
         """

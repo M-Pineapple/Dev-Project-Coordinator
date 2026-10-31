@@ -2,7 +2,7 @@
 
 Swift MCP server for a local project desk (coding and non-coding). Local JSON
 knowledge base. Complements a memory/RAG product (live state vs why). No money-path
-boundary. Public MIT under M-Pineapple. Formerly Claude Project Coordinator.
+boundary. Public Apache-2.0 under M-Pineapple. Formerly Claude Project Coordinator.
 
 ## Governance
 

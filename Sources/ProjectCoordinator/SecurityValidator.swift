@@ -341,14 +341,21 @@ public struct SecurityConfig: Codable, Sendable {
     public let maxNotesLength: Int
     public let maxSearchPatternLength: Int
     public let enableValidation: Bool
-    
+    public let deskPort: UInt16
+
+    enum CodingKeys: String, CodingKey {
+        case allowedPaths, maxProjectNameLength, maxDescriptionLength
+        case maxNotesLength, maxSearchPatternLength, enableValidation, deskPort
+    }
+
     public init(
         allowedPaths: [String],
         maxProjectNameLength: Int,
         maxDescriptionLength: Int,
         maxNotesLength: Int,
         maxSearchPatternLength: Int,
-        enableValidation: Bool
+        enableValidation: Bool,
+        deskPort: UInt16 = DeskServer.defaultPort
     ) {
         self.allowedPaths = allowedPaths
         self.maxProjectNameLength = maxProjectNameLength
@@ -356,15 +363,40 @@ public struct SecurityConfig: Codable, Sendable {
         self.maxNotesLength = maxNotesLength
         self.maxSearchPatternLength = maxSearchPatternLength
         self.enableValidation = enableValidation
+        self.deskPort = deskPort == 0 ? DeskServer.defaultPort : deskPort
     }
-    
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        allowedPaths = try container.decode([String].self, forKey: .allowedPaths)
+        maxProjectNameLength = try container.decode(Int.self, forKey: .maxProjectNameLength)
+        maxDescriptionLength = try container.decode(Int.self, forKey: .maxDescriptionLength)
+        maxNotesLength = try container.decode(Int.self, forKey: .maxNotesLength)
+        maxSearchPatternLength = try container.decode(Int.self, forKey: .maxSearchPatternLength)
+        enableValidation = try container.decode(Bool.self, forKey: .enableValidation)
+        let port = try container.decodeIfPresent(UInt16.self, forKey: .deskPort) ?? DeskServer.defaultPort
+        deskPort = port == 0 ? DeskServer.defaultPort : port
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(allowedPaths, forKey: .allowedPaths)
+        try container.encode(maxProjectNameLength, forKey: .maxProjectNameLength)
+        try container.encode(maxDescriptionLength, forKey: .maxDescriptionLength)
+        try container.encode(maxNotesLength, forKey: .maxNotesLength)
+        try container.encode(maxSearchPatternLength, forKey: .maxSearchPatternLength)
+        try container.encode(enableValidation, forKey: .enableValidation)
+        try container.encode(deskPort, forKey: .deskPort)
+    }
+
     public static let `default` = SecurityConfig(
         allowedPaths: SecurityValidator.allowedBasePaths,
         maxProjectNameLength: SecurityValidator.maxProjectNameLength,
         maxDescriptionLength: SecurityValidator.maxDescriptionLength,
         maxNotesLength: SecurityValidator.maxNotesLength,
         maxSearchPatternLength: SecurityValidator.maxSearchPatternLength,
-        enableValidation: true
+        enableValidation: true,
+        deskPort: DeskServer.defaultPort
     )
     
     /// Load configuration from file, creating default if none exists

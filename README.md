@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="Dev Project Coordinator logo" width="240"/>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
+  <img src="docs/images/logo.svg" alt="Dev Project Coordinator logo" width="160"/>
+</picture>
 
 # Dev Project Coordinator
 
@@ -8,18 +11,20 @@
 
 Formerly Claude Project Coordinator.
 
-[![Licence: MIT](https://img.shields.io/github/license/M-Pineapple/Claude-Project-Coordinator)](LICENSE)
+[![Licence: Apache 2.0](https://img.shields.io/github/license/M-Pineapple/Claude-Project-Coordinator)](LICENSE)
 [![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](https://www.swift.org)
 [![Stars](https://img.shields.io/github/stars/M-Pineapple/Claude-Project-Coordinator)](https://github.com/M-Pineapple/Claude-Project-Coordinator/stargazers)
 [![M-Pineapple/Claude-Project-Coordinator MCP server](https://glama.ai/mcp/servers/M-Pineapple/Claude-Project-Coordinator/badges/score.svg)](https://glama.ai/mcp/servers/M-Pineapple/Claude-Project-Coordinator)
 
-</div>
+<img src="docs/images/analytics-light.png" alt="Analytics tab of the local desk" width="720"/>
+<img src="docs/images/kanban-light.png" alt="Kanban tab of the local desk" width="720"/>
+<img src="docs/images/drag.gif" alt="Dragging a card on the local Kanban" width="720"/>
 
-<img src="assets/demo.gif" alt="project-coordinator answering initialize and listing tools" width="720"/>
+</div>
 
 DPC is a local stdio MCP server. It stores live project state (column, kind, counts, cards) as JSON. It does not host your data. It does not replace a memory or RAG product.
 
-**v2.0.0** · [official Swift MCP SDK](https://github.com/modelcontextprotocol/swift-sdk) · MIT · local JSON knowledge base
+**v2.0.0** · [official Swift MCP SDK](https://github.com/modelcontextprotocol/swift-sdk) · Apache 2.0 · local JSON knowledge base
 
 ---
 
@@ -51,6 +56,20 @@ Needs macOS 13+, Swift 6.0+ (Xcode 16+) and an MCP host (Claude Desktop, Cursor,
 3. Restart the host. Ask: "What is on my desk?" The agent should call `get_desk_summary` first.
 
 Coding folders must sit under an [allowed root](#security-configuration). Non-coding work can have no path.
+
+---
+
+## Open it as a Mac app
+
+The desk page is a local file by default. For drag-and-drop, and to pin it in the Dock like an app:
+
+1. Ask the agent to start the desk server, or run `dpc start_desk_server`.
+2. Open the **sign-in URL** once in Safari. That sets a cookie and redirects to `http://127.0.0.1:47821/` with no token in the address bar.
+3. Safari: **File > Add to Dock**. The Dock shortcut is the plain URL. It does not store the token.
+
+The port is fixed at **47821**. Change it with `DPC_DESK_PORT` or `deskPort` in `security-config.json`. If that port is busy, start fails with a clear error. It does not pick a random port.
+
+Rotate the write token with `start_desk_server` `rotate=true`, or `dpc start_desk_server --rotate`. Open the new sign-in URL once so the Dock app cookie updates.
 
 ---
 
@@ -129,7 +148,7 @@ You want a specialised desk operator.
 | Kanban | Columns backlog, doing, review, done, parked. Users may rename |
 | Cards | id, project, title, column, order, due, optional memoryRef |
 | Local page | Analytics tab + Kanban tab as `KnowledgeBase/desk/index.html` |
-| Interactive board | Opt-in `start_desk_server` on 127.0.0.1 with a 0600 write token |
+| Interactive board | Opt-in `start_desk_server` on 127.0.0.1:47821, 0600 write token, Safari Add to Dock |
 
 ### Analytics tab
 
@@ -184,7 +203,7 @@ No emoji as data. No remote fonts or assets. Light and dark follow the system.
 | `file_under_project` | `name`, optional `kind`, `description` | Non-coding find or create |
 | `rename_project` | `from`, `to` | Fix a wrong name |
 | `merge_projects` | `source`, `target` | Absorb a duplicate |
-| `start_desk_server` | — | Opt-in loopback Kanban |
+| `start_desk_server` | optional `rotate` | Opt-in loopback Kanban. Returns a bookmark URL and a one-time sign-in URL |
 
 You talk in natural language. The host maps your words onto these tools.
 
@@ -332,7 +351,7 @@ Config and env roots of `/`, the home directory, `~/Library`, `~/.ssh`, `~/.gnup
 
 The home directory itself is rejected. Rebuild after changing the compiled list.
 
-The optional desk server binds `127.0.0.1` only. A random write token is stored in `KnowledgeBase/desk/.write-token` with mode 0600. Every write needs that token. Origin and Host must match the loopback URL with the port. There is no CORS wildcard. Every response includes `Content-Security-Policy` and `X-Content-Type-Options`.
+The optional desk server binds `127.0.0.1` only, default port 47821 (`DPC_DESK_PORT` or `security-config.json` `deskPort`). A random write token is stored in `KnowledgeBase/desk/.write-token` with mode 0600. Open the sign-in URL once. That sets an HttpOnly `SameSite=Strict` cookie and redirects to `/`, so the Dock shortcut has no token. Writes accept that cookie or the `X-DPC-Token` header. Origin and Host must match the loopback URL with the port. There is no CORS wildcard. Every response includes `Content-Security-Policy` and `X-Content-Type-Options`.
 
 ---
 
@@ -353,6 +372,7 @@ Claude-Project-Coordinator/
 ├── Tests/ProjectCoordinatorTests/
 ├── KnowledgeBase/              # Patterns, templates, local JSON
 ├── docs/grok-bot/              # Paste-in prompt and skill
+├── docs/images/                # Logo, favicon, screenshot placeholders
 ├── scripts/
 ├── Package.swift
 └── README.md
@@ -407,7 +427,7 @@ Contributions are welcome. Report bugs, suggest features, open pull requests, or
 
 ## License
 
-MIT License.
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Releases before v2.0.0 were MIT.
 
 ## Acknowledgments
 

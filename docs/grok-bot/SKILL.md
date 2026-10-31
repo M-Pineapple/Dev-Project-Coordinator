@@ -15,7 +15,7 @@ Use with the Dev Project Coordinator MCP. Enable on a specialised Grok Bot or pa
 | Column change | `move_card` |
 | Decision lives in memory | `update_card` with `memoryRef` only |
 | User wants the page | `open_desk` |
-| User asked for drag-and-drop | `start_desk_server` |
+| User asked for drag-and-drop or Add to Dock | `start_desk_server`. Give the sign-in URL once, then the plain URL for Dock |
 
 ## 800-token rule
 

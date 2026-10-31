@@ -190,7 +190,7 @@ struct RamboDeskServerTests {
             )
         )
         #expect(ok.status == 200)
-        #expect(ok.headers["Set-Cookie"] != nil)
+        #expect(ok.headers["Set-Cookie"] == nil)
         #expect(ok.headers["Content-Security-Policy"]?.contains("default-src 'none'") == true)
         #expect(ok.headers["X-Content-Type-Options"] == "nosniff")
 

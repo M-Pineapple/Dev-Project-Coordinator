@@ -160,6 +160,9 @@ struct ParityAnalyticsTests {
         try FileManager.default.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
         try html.write(to: out, atomically: true, encoding: .utf8)
         #expect(FileManager.default.fileExists(atPath: out.path))
+        let live = SampleDesk.makeHTML(now: now, mode: .live)
+        try live.write(to: SampleDesk.liveOutputURL(), atomically: true, encoding: .utf8)
+        #expect(FileManager.default.fileExists(atPath: SampleDesk.liveOutputURL().path))
     }
 }
 
@@ -172,7 +175,15 @@ enum SampleDesk {
             .appendingPathComponent(".scratch/out/sample-desk.html")
     }
 
-    static func makeHTML(now: Date) -> String {
+    static func liveOutputURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(".scratch/out/sample-desk-live.html")
+    }
+
+    static func makeHTML(now: Date, mode: DeskPageMode = .file) -> String {
         let calendar = Calendar.current
         func days(_ n: Int) -> Date { calendar.date(byAdding: .day, value: n, to: now) ?? now }
 
@@ -294,7 +305,8 @@ enum SampleDesk {
             projects: projects,
             board: Board(cards: cards),
             records: records,
-            now: now
+            now: now,
+            mode: mode
         )
     }
 }

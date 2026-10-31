@@ -43,6 +43,11 @@ public enum MCPBootstrap {
     }
 
     public static func run() async throws {
+        let args = CommandLine.arguments
+        if args.contains("start_desk_server") {
+            try await runDeskServerCLI(rotate: args.contains("--rotate"))
+            return
+        }
         let knowledgeBasePath = KnowledgeBasePaths.resolve()
         let projectManager = ProjectManager(knowledgeBasePath: knowledgeBasePath)
         let analytics = ProjectAnalytics(knowledgeBasePath: knowledgeBasePath)
@@ -53,9 +58,30 @@ public enum MCPBootstrap {
         await server.waitUntilCompleted()
     }
 
+    private static func runDeskServerCLI(rotate: Bool) async throws {
+        let knowledgeBasePath = KnowledgeBasePaths.resolve()
+        let projectManager = ProjectManager(knowledgeBasePath: knowledgeBasePath)
+        let analytics = ProjectAnalytics(knowledgeBasePath: knowledgeBasePath)
+        await projectManager.initialize(analytics: analytics)
+        let message = try await projectManager.startDeskServer(rotate: rotate)
+        if let data = (message + "\n").data(using: .utf8) {
+            FileHandle.standardOutput.write(data)
+        }
+        while true {
+            try await Task.sleep(nanoseconds: 3_600_000_000_000)
+        }
+    }
+
     private static func stringProp(_ description: String) -> Value {
         .object([
             "type": .string("string"),
+            "description": .string(description)
+        ])
+    }
+
+    private static func boolProp(_ description: String) -> Value {
+        .object([
+            "type": .string("boolean"),
             "description": .string(description)
         ])
     }
@@ -258,8 +284,13 @@ public enum MCPBootstrap {
             ),
             Tool(
                 name: "start_desk_server",
-                description: "Opt-in localhost Kanban server bound to 127.0.0.1. Token file mode 0600. Static index.html still works without it.",
-                inputSchema: objectSchema(properties: [:], required: [])
+                description: "Opt-in localhost Kanban server bound to 127.0.0.1 on a fixed port (default 47821). Returns a bookmark URL with no token plus a one-time sign-in URL. Token file mode 0600. Static index.html still works without it.",
+                inputSchema: objectSchema(
+                    properties: [
+                        "rotate": boolProp("Rotate the write token. Open the new sign-in URL once so the Dock app cookie updates.")
+                    ],
+                    required: []
+                )
             ),
         ]
     }
@@ -433,7 +464,8 @@ public enum MCPBootstrap {
             return try await projectManager.mergeProjects(source: source, into: target)
 
         case "start_desk_server":
-            return try await projectManager.startDeskServer()
+            let rotate = arguments["rotate"]?.boolValue ?? false
+            return try await projectManager.startDeskServer(rotate: rotate)
 
         default:
             throw CoordinatorError.unknownTool

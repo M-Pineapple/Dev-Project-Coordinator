@@ -29,7 +29,10 @@ let package = Package(
             dependencies: [
                 .product(name: "MCP", package: "swift-sdk"),
             ],
-            path: "Sources/ProjectCoordinator"
+            path: "Sources/ProjectCoordinator",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .executableTarget(
             name: "project-coordinator",

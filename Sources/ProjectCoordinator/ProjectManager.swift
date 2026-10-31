@@ -514,16 +514,20 @@ public actor ProjectManager {
         await cardStore.snapshot()
     }
 
-    public func startDeskServer() async throws -> String {
+    public func startDeskServer(rotate: Bool = false) async throws -> String {
         if let deskServer, deskServer.isRunning {
-            return "Desk server already at http://127.0.0.1:\(deskServer.port)"
+            if rotate {
+                try deskServer.rotateToken()
+            }
+            return Self.deskServerMessage(server: deskServer, rotated: rotate)
         }
         let kb = knowledgeBasePath
         let box = ManagerHandle(self)
+        let port = DeskServer.resolvePort(configPort: securityConfig.deskPort)
         let server = try DeskServer(
             knowledgeBasePath: kb,
             bindHost: "127.0.0.1",
-            port: 0,
+            port: port,
             htmlProvider: {
                 DeskPage.renderFromKnowledgeBase(knowledgeBasePath: kb, mode: .live)
             },
@@ -541,10 +545,17 @@ public actor ProjectManager {
         try server.start()
         deskServer = server
         try await regenerateDesk()
+        return Self.deskServerMessage(server: server, rotated: false)
+    }
+
+    static func deskServerMessage(server: DeskServer, rotated: Bool) -> String {
+        let rotation = rotated ? "Write token rotated.\n" : ""
         return """
-        Desk server listening on http://127.0.0.1:\(server.port)
+        \(rotation)\(server.plainURL)
+        Sign-in (open once in Safari, then File > Add to Dock): \(server.signInURL)
         Write token file: \(server.tokenFileURL.path) (mode 0600)
-        Token is required on every write. Origin and Host must match the loopback URL.
+        Port is fixed. If it is busy, start fails. Set DPC_DESK_PORT or security-config deskPort.
+        Writes accept the cookie from sign-in or the X-DPC-Token header.
         Static KnowledgeBase/desk/index.html still works without this server.
         """
     }

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2026-10-31
 
+### Licence
+- Relicensed from MIT to Apache License 2.0, with a NOTICE file. Earlier releases stay under MIT.
+
 ### Added
 - Multi-language detector (swift, python, javascript, typescript, node, go, rust, ruby, php, java, kotlin, csharp, dotnet, cpp, docker, web, plus spm / xcode-project / xcode-workspace / swiftui from a shallow scan)
 - Non-coding project kinds with optional path, including accounting and business
@@ -20,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional `memoryRef` on cards (opaque; DPC never calls a memory service)
 - `get_desk_summary` with an 800-token cap
 - Local Analytics + Kanban HTML page (`open_desk`)
-- Opt-in loopback desk server for drag-and-drop (`127.0.0.1`, write token mode 0600)
+- Opt-in loopback desk server for drag-and-drop (`127.0.0.1:47821`, write token mode 0600, Safari Add to Dock)
+- Desk logo, favicon, and PWA manifest for a standalone Dock web app
+- Kanban cards with kind, PR, and memoryRef chips, relative time, keyboard move, and optimistic drag
 - `dpc` executable alias
 - `DPC_KNOWLEDGE_BASE` (preferred over `CPC_KNOWLEDGE_BASE`)
 - Grok Bot paste-in prompt and skill under `docs/grok-bot/`
@@ -33,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security allowlist honours `security-config.json` and `DPC_ALLOWED_PATHS`
 - `~/Desktop` is not an allowed root by default (only `~/Desktop/Development`); add it through `security-config.json` or `DPC_ALLOWED_PATHS` if you need it
 - README and Quick Start rewritten for the product
+- Desk server uses a fixed port and a one-time sign-in URL. The bookmark URL has no token
+- Desk subtitle: nothing leaves this machine
 
 ### Fixed
 - `*-analytics.json` is not loaded as a project
