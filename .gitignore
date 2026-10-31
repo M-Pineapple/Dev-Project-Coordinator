@@ -27,3 +27,6 @@ Package.resolved
 # Development artifacts
 test-phase1.sh
 PHASE1-SUMMARY.md
+
+# Generated project index (lists your projects and paths). Created on first run.
+KnowledgeBase/project-index.md
