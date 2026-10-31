@@ -1,11 +1,62 @@
 # Changelog
 
-All notable changes to Claude Project Coordinator will be documented in this file.
+All notable changes to Dev Project Coordinator (formerly Claude Project Coordinator) will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [2.0.0] - 2026-10-31
+
+### Licence
+- Relicensed from MIT to Apache License 2.0, with a NOTICE file. Earlier releases stay under MIT.
+
+### Added
+- Multi-language detector (swift, python, javascript, typescript, node, go, rust, ruby, php, java, kotlin, csharp, dotnet, cpp, docker, web, plus spm / xcode-project / xcode-workspace / swiftui from a shallow scan)
+- Non-coding project kinds with optional path, including accounting and business
+- Analytics tab dashboard: project health gauges, 14-day activity heat map, technology trends, collapsible status timeline, shared with the MCP tools
+- Kind-aware health: non-coding projects are not penalised for missing code docs or a tech stack
+- Automatic register from working directory and git remote
+- Find-or-create, rename, and merge for non-coding work
+- Kanban cards and default columns backlog, doing, review, done, parked
+- Optional `memoryRef` on cards (opaque; DPC never calls a memory service)
+- `get_desk_summary` with an 800-token cap
+- Local Analytics + Kanban HTML page (`open_desk`)
+- Opt-in loopback desk server for drag-and-drop (`127.0.0.1:47821`, write token mode 0600, Safari Add to Dock)
+- Desk logo, favicon, and PWA manifest for a standalone Dock web app
+- Kanban cards with kind, PR, and memoryRef chips, relative time, keyboard move, and optimistic drag
+- `dpc` executable alias
+- `DPC_KNOWLEDGE_BASE` (preferred over `CPC_KNOWLEDGE_BASE`)
+- Grok Bot paste-in prompt and skill under `docs/grok-bot/`
+
+### Changed
+- Display name is Dev Project Coordinator. MCP server key stays `project-coordinator`
+- Log prefix is `[DPC]`
+- `add_project` no longer requires a path
+- Search is `search_desk` (`search_code_patterns` remains as an alias)
+- Security allowlist honours `security-config.json` and `DPC_ALLOWED_PATHS`
+- `~/Desktop` is not an allowed root by default (only `~/Desktop/Development`); add it through `security-config.json` or `DPC_ALLOWED_PATHS` if you need it
+- README and Quick Start rewritten for the product
+- Desk server uses a fixed port and a one-time sign-in code (`?signin=`, valid once, for 10 minutes). The bookmark URL has no token. The write token is long-lived until rotation
+- Desk subtitle: nothing leaves this machine
+
+### Fixed
+- `*-analytics.json` is not loaded as a project
+- KnowledgeBase templates are written only when missing
+- Swift-only fallback on add is gone
+- Quick Start no longer shows `--port 3000`
+- Desk server rejects an empty, duplicate, or oversized `Content-Length` with 400 instead of trapping
+- Desk server matches the `Content-Length` header name exactly (case-insensitive)
+- Desk server checks Host on every request and rejects a Host header without a port
+- Desk server Host/Origin allowlist is IPv4 loopback only (`127.0.0.1` and `localhost`)
+- Desk token file is created 0600; path checks resolve symlinks and drop forbidden roots
+- Desk sign-in uses a single-use in-memory code. `?token=` is rejected. Calling `start_desk_server` while running mints a new code without rotating
+- Desk responses send `Referrer-Policy: no-referrer`. PR chips are https-only with `rel="noopener noreferrer"` and `target="_blank"`
+- Invalid `DPC_DESK_PORT` logs a warning and falls back. Invalid `deskPort` in security-config is ignored without rewriting the file
+
+### Deprecated
+- `CPC_KNOWLEDGE_BASE` and the `project-coordinator` server key. Removal in v3.0
 
 ## [1.4.2] - 2026-10-15
 

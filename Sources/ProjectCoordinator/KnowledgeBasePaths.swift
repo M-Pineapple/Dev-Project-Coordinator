@@ -1,16 +1,23 @@
 import Foundation
 
-/// Resolves the on-disk KnowledgeBase directory for CPC.
+/// Resolves the on-disk KnowledgeBase directory for DPC.
 public enum KnowledgeBasePaths {
-    /// Environment override used by tests and custom installs.
-    public static let environmentKey = "CPC_KNOWLEDGE_BASE"
+    /// Preferred override. Used when both this and the legacy key are set.
+    public static let environmentKey = "DPC_KNOWLEDGE_BASE"
+    /// Legacy override kept through v2.x. Removed in v3.0.
+    public static let legacyEnvironmentKey = "CPC_KNOWLEDGE_BASE"
 
     /// Resolve KnowledgeBase path.
-    /// Order: `CPC_KNOWLEDGE_BASE` → walk up from executable for Package.swift/KnowledgeBase → cwd.
+    /// Order: `DPC_KNOWLEDGE_BASE` → `CPC_KNOWLEDGE_BASE` → walk up from executable → cwd.
     public static func resolve(fileManager: FileManager = .default) -> String {
-        if let override = ProcessInfo.processInfo.environment[environmentKey],
+        let env = ProcessInfo.processInfo.environment
+        if let override = env[environmentKey],
            !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return (override as NSString).expandingTildeInPath
+        }
+        if let legacy = env[legacyEnvironmentKey],
+           !legacy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return (legacy as NSString).expandingTildeInPath
         }
 
         if let fromExecutable = locateNearExecutable(fileManager: fileManager) {

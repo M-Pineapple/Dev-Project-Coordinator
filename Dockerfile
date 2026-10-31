@@ -10,6 +10,7 @@ COPY . .
 RUN mkdir -p /data/KnowledgeBase \
     && swift build -c release
 
+ENV DPC_KNOWLEDGE_BASE=/data/KnowledgeBase
 ENV CPC_KNOWLEDGE_BASE=/data/KnowledgeBase
 
 CMD ["/app/.build/release/project-coordinator"]

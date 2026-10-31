@@ -16,7 +16,7 @@ public enum CPCLog {
     }
 
     private static func write(prefix: String, message: String) {
-        let line = "[CPC][\(prefix)] \(message)\n"
+        let line = "[DPC][\(prefix)] \(message)\n"
         if let data = line.data(using: .utf8) {
             FileHandle.standardError.write(data)
         }

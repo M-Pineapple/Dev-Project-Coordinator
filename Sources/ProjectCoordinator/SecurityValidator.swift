@@ -9,12 +9,98 @@ public struct SecurityValidator {
     // Allowed project directory patterns (expandable)
     public static let allowedBasePaths = [
         NSHomeDirectory() + "/Developer",
-        NSHomeDirectory() + "/Documents", 
+        NSHomeDirectory() + "/Documents",
         NSHomeDirectory() + "/GitHub",
         NSHomeDirectory() + "/Projects",
         NSHomeDirectory() + "/Desktop/Development",
         NSHomeDirectory() + "/Xcode"
     ]
+
+    /// Union of compiled roots, config JSON, extra test roots, and `DPC_ALLOWED_PATHS`.
+    /// Config and env roots of `/`, the home directory, or `~/Library`, `~/.ssh`,
+    /// `~/.gnupg`, `~/.aws` are dropped. `security-config.json` is trusted input.
+    public static func effectiveAllowedBasePaths(
+        config: SecurityConfig? = nil,
+        extra: [String] = []
+    ) -> [String] {
+        var roots = allowedBasePaths.map { resolvedPath($0) }
+        var candidates: [String] = []
+        if let config {
+            candidates.append(contentsOf: config.allowedPaths)
+        }
+        candidates.append(contentsOf: extra)
+        if let env = ProcessInfo.processInfo.environment["DPC_ALLOWED_PATHS"] {
+            for part in env.split(separator: ":") {
+                let item = String(part).trimmingCharacters(in: .whitespaces)
+                if !item.isEmpty { candidates.append(item) }
+            }
+        }
+        for item in candidates {
+            let trimmed = item.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            if isForbiddenRoot(trimmed) {
+                CPCLog.warning("Ignoring forbidden allowed root: \(trimmed)")
+                continue
+            }
+            roots.append(resolvedPath(trimmed))
+        }
+        var seen = Set<String>()
+        return roots.filter { seen.insert($0).inserted }
+    }
+
+    /// Expand a leading `~` only. A tilde later in the path is left alone.
+    public static func expandPath(_ path: String) -> String {
+        let expanded: String
+        if path == "~" {
+            expanded = NSHomeDirectory()
+        } else if path.hasPrefix("~/") {
+            expanded = NSHomeDirectory() + String(path.dropFirst(1))
+        } else {
+            expanded = path
+        }
+        return URL(fileURLWithPath: expanded).standardized.path
+    }
+
+    public static func resolvedPath(_ path: String) -> String {
+        let expanded = expandPath(path)
+        let url = URL(fileURLWithPath: expanded)
+        if FileManager.default.fileExists(atPath: url.path) {
+            return url.resolvingSymlinksInPath().path
+        }
+        var current = url
+        while current.path != "/", !current.path.isEmpty {
+            let parent = current.deletingLastPathComponent()
+            if FileManager.default.fileExists(atPath: parent.path) {
+                let resolvedParent = parent.resolvingSymlinksInPath()
+                let remainder = url.pathComponents.dropFirst(parent.pathComponents.count)
+                return remainder.reduce(resolvedParent) { partial, component in
+                    partial.appendingPathComponent(component)
+                }.path
+            }
+            current = parent
+        }
+        return url.standardized.path
+    }
+
+    /// `/`, the home directory, and selected secret locations are never roots.
+    public static func isForbiddenRoot(_ path: String) -> Bool {
+        let resolved = resolvedPath(path)
+        if resolved == "/" { return true }
+        let home = URL(fileURLWithPath: NSHomeDirectory()).resolvingSymlinksInPath().path
+        if resolved == home { return true }
+        let forbidden = [
+            home + "/Library",
+            home + "/.ssh",
+            home + "/.gnupg",
+            home + "/.aws"
+        ]
+        for prefix in forbidden {
+            if resolved == prefix || resolved.hasPrefix(prefix + "/") {
+                return true
+            }
+        }
+        return false
+    }
     
     // Maximum lengths to prevent DoS and maintain reasonable limits
     public static let maxProjectNameLength = 100
@@ -26,7 +112,10 @@ public struct SecurityValidator {
     // MARK: - Path Validation
     
     /// Validates and sanitizes a project path
-    public static func validateProjectPath(_ path: String) throws -> String {
+    public static func validateProjectPath(
+        _ path: String,
+        allowedBasePaths: [String] = SecurityValidator.allowedBasePaths
+    ) throws -> String {
         // Basic length check
         guard !path.isEmpty else {
             throw SecurityError.emptyPath
@@ -36,37 +125,31 @@ public struct SecurityValidator {
             throw SecurityError.pathTooLong
         }
         
-        // Expand tilde to home directory
-        let expandedPath = path.replacingOccurrences(of: "~", with: NSHomeDirectory())
-        
-        // Normalize path (removes . and .. components safely)
+        let expandedPath = expandPath(path)
         let normalizedPath = URL(fileURLWithPath: expandedPath).standardized.path
-        
-        // Check for obvious path traversal attempts
+        let resolvedCandidate = resolvedPath(path)
+
         let dangerousPatterns = ["../", "..\\", "/..", "\\..", "..%2F", "..%5C"]
         for pattern in dangerousPatterns {
             guard !path.contains(pattern) && !normalizedPath.contains(pattern) else {
                 throw SecurityError.pathTraversalDetected
             }
         }
-        
-        // Verify it's within allowed directories (project path must be under a base path).
-        // Exact match of a base path, or prefix of "base/" — never the reverse
-        // (which previously allowed the entire home directory).
+
         let isAllowed = allowedBasePaths.contains { basePath in
-            let standardizedBase = URL(fileURLWithPath: basePath).standardized.path
-            if normalizedPath == standardizedBase {
+            let standardizedBase = resolvedPath(basePath)
+            if resolvedCandidate == standardizedBase {
                 return true
             }
             let prefix = standardizedBase.hasSuffix("/") ? standardizedBase : standardizedBase + "/"
-            return normalizedPath.hasPrefix(prefix)
+            return resolvedCandidate.hasPrefix(prefix)
         }
 
         guard isAllowed else {
-            throw SecurityError.pathNotAllowed(normalizedPath, allowedPaths: allowedBasePaths)
+            throw SecurityError.pathNotAllowed(resolvedCandidate, allowedPaths: allowedBasePaths)
         }
 
-        return normalizedPath
+        return resolvedCandidate
     }
     
     // MARK: - Project Name Validation
@@ -258,14 +341,21 @@ public struct SecurityConfig: Codable, Sendable {
     public let maxNotesLength: Int
     public let maxSearchPatternLength: Int
     public let enableValidation: Bool
-    
+    public let deskPort: UInt16
+
+    enum CodingKeys: String, CodingKey {
+        case allowedPaths, maxProjectNameLength, maxDescriptionLength
+        case maxNotesLength, maxSearchPatternLength, enableValidation, deskPort
+    }
+
     public init(
         allowedPaths: [String],
         maxProjectNameLength: Int,
         maxDescriptionLength: Int,
         maxNotesLength: Int,
         maxSearchPatternLength: Int,
-        enableValidation: Bool
+        enableValidation: Bool,
+        deskPort: UInt16 = DeskServer.defaultPort
     ) {
         self.allowedPaths = allowedPaths
         self.maxProjectNameLength = maxProjectNameLength
@@ -273,27 +363,66 @@ public struct SecurityConfig: Codable, Sendable {
         self.maxNotesLength = maxNotesLength
         self.maxSearchPatternLength = maxSearchPatternLength
         self.enableValidation = enableValidation
+        self.deskPort = deskPort == 0 ? DeskServer.defaultPort : deskPort
     }
-    
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        allowedPaths = try container.decode([String].self, forKey: .allowedPaths)
+        maxProjectNameLength = try container.decode(Int.self, forKey: .maxProjectNameLength)
+        maxDescriptionLength = try container.decode(Int.self, forKey: .maxDescriptionLength)
+        maxNotesLength = try container.decode(Int.self, forKey: .maxNotesLength)
+        maxSearchPatternLength = try container.decode(Int.self, forKey: .maxSearchPatternLength)
+        enableValidation = try container.decode(Bool.self, forKey: .enableValidation)
+        deskPort = Self.decodeDeskPort(from: container)
+    }
+
+    /// Invalid or out-of-range `deskPort` is ignored with a warning. Other fields stay.
+    private static func decodeDeskPort(from container: KeyedDecodingContainer<CodingKeys>) -> UInt16 {
+        guard container.contains(.deskPort) else {
+            return DeskServer.defaultPort
+        }
+        if let port = try? container.decode(UInt16.self, forKey: .deskPort), port > 0 {
+            return port
+        }
+        CPCLog.warning("Ignoring invalid deskPort in security-config.json; using \(DeskServer.defaultPort)")
+        return DeskServer.defaultPort
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(allowedPaths, forKey: .allowedPaths)
+        try container.encode(maxProjectNameLength, forKey: .maxProjectNameLength)
+        try container.encode(maxDescriptionLength, forKey: .maxDescriptionLength)
+        try container.encode(maxNotesLength, forKey: .maxNotesLength)
+        try container.encode(maxSearchPatternLength, forKey: .maxSearchPatternLength)
+        try container.encode(enableValidation, forKey: .enableValidation)
+        try container.encode(deskPort, forKey: .deskPort)
+    }
+
     public static let `default` = SecurityConfig(
         allowedPaths: SecurityValidator.allowedBasePaths,
         maxProjectNameLength: SecurityValidator.maxProjectNameLength,
         maxDescriptionLength: SecurityValidator.maxDescriptionLength,
         maxNotesLength: SecurityValidator.maxNotesLength,
         maxSearchPatternLength: SecurityValidator.maxSearchPatternLength,
-        enableValidation: true
+        enableValidation: true,
+        deskPort: DeskServer.defaultPort
     )
     
     /// Load configuration from file, creating default if none exists
     public static func load(from path: String) -> SecurityConfig {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-              let config = try? JSONDecoder().decode(SecurityConfig.self, from: data) else {
-            // Create default config file
-            let defaultConfig = SecurityConfig.default
-            try? defaultConfig.save(to: path)
-            return defaultConfig
+        let url = URL(fileURLWithPath: path)
+        if let data = try? Data(contentsOf: url) {
+            if let config = try? JSONDecoder().decode(SecurityConfig.self, from: data) {
+                return config
+            }
+            CPCLog.warning("Could not decode security-config.json at \(path); using defaults without rewriting the file")
+            return SecurityConfig.default
         }
-        return config
+        let defaultConfig = SecurityConfig.default
+        try? defaultConfig.save(to: path)
+        return defaultConfig
     }
     
     /// Save configuration to file

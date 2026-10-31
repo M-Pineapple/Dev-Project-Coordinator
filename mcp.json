@@ -1,14 +1,14 @@
 {
   "name": "project-coordinator",
-  "version": "1.4.2",
-  "description": "MCP server for managing and coordinating Xcode/Swift projects",
+  "version": "2.0.0",
+  "description": "Dev Project Coordinator: local MCP desk for coding and non-coding work",
   "author": "Pineapple",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "build": {
     "command": "swift build -c release"
   },
   "install": {
-    "note": "Add the configuration below to your Claude Desktop / Cursor / Claude Code MCP settings",
+    "note": "Add the configuration below to your Claude Desktop / Cursor / Claude Code MCP settings. Server key project-coordinator still works; prefer dpc in new configs. Binary also available as dpc.",
     "config": {
       "command": "/path/to/Claude-Project-Coordinator/.build/release/project-coordinator",
       "args": []

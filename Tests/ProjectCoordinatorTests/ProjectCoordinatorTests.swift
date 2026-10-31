@@ -10,13 +10,21 @@ struct SecurityValidatorTests {
     func allowsUnderBase() throws {
         let path = home + "/Developer/SampleApp"
         let result = try SecurityValidator.validateProjectPath(path)
-        #expect(result == URL(fileURLWithPath: path).standardized.path)
+        #expect(result == URL(fileURLWithPath: path).resolvingSymlinksInPath().path)
     }
 
     @Test("allows tilde expansion into an allowed base")
     func allowsTilde() throws {
         let result = try SecurityValidator.validateProjectPath("~/GitHub/SampleApp")
-        #expect(result.hasPrefix(home + "/GitHub/"))
+        let prefix = URL(fileURLWithPath: home + "/GitHub").resolvingSymlinksInPath().path
+        #expect(result == prefix || result.hasPrefix(prefix + "/"))
+    }
+
+    @Test("Desktop itself is not a default root")
+    func rejectsDesktopByDefault() {
+        #expect(throws: SecurityError.self) {
+            _ = try SecurityValidator.validateProjectPath("~/Desktop/SampleApp")
+        }
     }
 
     @Test("rejects the home directory itself")
@@ -55,16 +63,42 @@ struct SecurityValidatorTests {
     }
 }
 
-@Suite("KnowledgeBasePaths")
+@Suite("KnowledgeBasePaths", .serialized)
 struct KnowledgeBasePathsTests {
-    @Test("honours CPC_KNOWLEDGE_BASE override")
+    @Test("honours DPC_KNOWLEDGE_BASE override")
     func environmentOverride() {
-        let override = NSTemporaryDirectory() + "cpc-kb-test-\(UUID().uuidString)"
+        let override = NSTemporaryDirectory() + "dpc-kb-test-\(UUID().uuidString)"
+        unsetenv(KnowledgeBasePaths.legacyEnvironmentKey)
         setenv(KnowledgeBasePaths.environmentKey, override, 1)
         defer { unsetenv(KnowledgeBasePaths.environmentKey) }
 
         let resolved = KnowledgeBasePaths.resolve()
         #expect(resolved == (override as NSString).expandingTildeInPath)
+    }
+
+    @Test("falls back to CPC_KNOWLEDGE_BASE")
+    func legacyOverride() {
+        let override = NSTemporaryDirectory() + "cpc-kb-test-\(UUID().uuidString)"
+        unsetenv(KnowledgeBasePaths.environmentKey)
+        setenv(KnowledgeBasePaths.legacyEnvironmentKey, override, 1)
+        defer { unsetenv(KnowledgeBasePaths.legacyEnvironmentKey) }
+
+        let resolved = KnowledgeBasePaths.resolve()
+        #expect(resolved == (override as NSString).expandingTildeInPath)
+    }
+
+    @Test("prefers DPC_KNOWLEDGE_BASE when both are set")
+    func prefersNewKey() {
+        let dpc = NSTemporaryDirectory() + "dpc-pref-\(UUID().uuidString)"
+        let cpc = NSTemporaryDirectory() + "cpc-pref-\(UUID().uuidString)"
+        setenv(KnowledgeBasePaths.environmentKey, dpc, 1)
+        setenv(KnowledgeBasePaths.legacyEnvironmentKey, cpc, 1)
+        defer {
+            unsetenv(KnowledgeBasePaths.environmentKey)
+            unsetenv(KnowledgeBasePaths.legacyEnvironmentKey)
+        }
+        let resolved = KnowledgeBasePaths.resolve()
+        #expect(resolved == (dpc as NSString).expandingTildeInPath)
     }
 }
 
@@ -115,9 +149,11 @@ struct AnalyticsMigrationTests {
 
 @Suite("Version")
 struct VersionTests {
-    @Test("version string is 1.4.2")
+    @Test("version string is 2.0.0")
     func versionPin() {
-        #expect(CPCVersion.string == "1.4.2")
+        #expect(CPCVersion.string == "2.0.0")
         #expect(CPCVersion.serverName == "project-coordinator")
+        #expect(CPCVersion.preferredServerName == "dev-project-coordinator")
+        #expect(CPCVersion.displayName == "Dev Project Coordinator")
     }
 }

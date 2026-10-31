@@ -1,6 +1,6 @@
 # Claude Project Coordinator - Analytics Examples
 
-This document shows **actual output examples** from CPC v1.3.0's analytics features, exactly as they appear in Claude chat.
+This document shows example tool output. v2.0.0 uses the same headings and numbers. Heat levels are words (`quiet` / `warm` / `active` / `hot`) rather than emoji. Health groups keep the v1 band names.
 
 ## 📊 Analytics Commands & Real Output
 
@@ -12,12 +12,12 @@ This document shows **actual output examples** from CPC v1.3.0's analytics featu
 ```
 ## Project Activity Heat Map (Past 7 Days)
 
-🔥🔥🔥 **TodoApp** (15 activity points - 6 events)
-🔥🔥🔥 **WeatherStation** (12 activity points - 5 events)
-🔥🔥 **PortfolioSite** (8 activity points - 3 events)
-🔥 **NotesSync** (3 activity points - 2 events)
-💤 **OldBlogEngine** (0 activity points)
-💤 **TestProject** (0 activity points)
+hot **TodoApp** (15 activity points - 6 events)
+hot **WeatherStation** (12 activity points - 5 events)
+active **PortfolioSite** (8 activity points - 3 events)
+warm **NotesSync** (3 activity points - 2 events)
+quiet **OldBlogEngine** (0 activity points)
+quiet **TestProject** (0 activity points)
 
 ### Daily Activity Breakdown:
 - Monday, Jun 10: 4 events
@@ -90,30 +90,30 @@ This document shows **actual output examples** from CPC v1.3.0's analytics featu
 ```
 ## Project Health Report
 
-### 🚨 Critical (Needs Immediate Attention):
+### Critical (Needs Immediate Attention):
 #### OldBlogEngine (Health: 28/100)
-  - ❌ Activity Level: 0/100 - 0 events in last 30 days
-  - ❌ Freshness: 10/100 - Last updated 45 days ago
-  - ❌ Documentation: 25/100 - Missing description and notes
-  - ✅ Task Completion: 75/100 - 3/4 tasks completed
-  - **Recommendations**: Archive or revive project, Add documentation
+  - low Activity Level: 0/100 - 0 events in last 30 days
+  - low Freshness: 10/100 - Last updated 45 days ago
+  - low Documentation Quality: 25/100 - Needs more documentation
+  - ok Task Completion: 75/100 - 3/4 tasks completed
+  - **Recommendations**: Increase project activity, Update project status, Add project documentation
 
 #### TestProject (Health: 35/100)
-  - ❌ Activity Level: 5/100 - 1 event in last 30 days
-  - ❌ Freshness: 30/100 - Last updated 15 days ago
-  - ⚠️ Documentation: 50/100 - Has description, needs notes
-  - ⚠️ Task Completion: 50/100 - 2/4 tasks completed
-  - **Recommendations**: Update project status, Complete pending tasks
+  - low Activity Level: 5/100 - 1 event in last 30 days
+  - low Freshness: 30/100 - Last updated 15 days ago
+  - watch Documentation Quality: 50/100 - Needs more documentation
+  - watch Task Completion: 50/100 - 2/4 tasks completed
+  - **Recommendations**: Increase project activity, Update project status
 
-### ⚠️ Needs Attention:
+### Needs Attention:
 #### NotesSync (Health: 65/100)
-  - ⚠️ Activity Level: 40/100 - 3 events in last 30 days
-  - ✅ Freshness: 90/100 - Last updated 2 days ago
-  - ✅ Documentation: 100/100 - Well documented
-  - ❌ Task Completion: 30/100 - 3/10 tasks completed
+  - watch Activity Level: 40/100 - 3 events in last 30 days
+  - ok Freshness: 90/100 - Last updated 2 days ago
+  - ok Documentation Quality: 100/100 - Well documented
+  - low Task Completion: 30/100 - 3/10 tasks completed
   - **Recommendations**: Focus on completing tasks
 
-### ✅ Healthy Projects:
+### Healthy Projects:
 - **TodoApp** (Health: 92/100)
 - **WeatherStation** (Health: 88/100)
 - **PortfolioSite** (Health: 85/100)
