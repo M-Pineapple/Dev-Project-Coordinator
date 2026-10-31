@@ -284,10 +284,10 @@ public enum MCPBootstrap {
             ),
             Tool(
                 name: "start_desk_server",
-                description: "Opt-in localhost Kanban server bound to 127.0.0.1 on a fixed port (default 47821). Returns a bookmark URL with no token plus a one-time sign-in URL. Token file mode 0600. Static index.html still works without it.",
+                description: "Opt-in localhost Kanban server bound to 127.0.0.1 on a fixed port (default 47821). Returns a bookmark URL with no token plus a one-time sign-in URL (valid once, for 10 minutes). Calling again while running mints a new sign-in code without rotating the write token. Token file mode 0600. Static index.html still works without it.",
                 inputSchema: objectSchema(
                     properties: [
-                        "rotate": boolProp("Rotate the write token. Open the new sign-in URL once so the Dock app cookie updates.")
+                        "rotate": boolProp("Rotate the write token and mint a new sign-in code. Open the new sign-in URL once so the Dock app cookie updates.")
                     ],
                     required: []
                 )

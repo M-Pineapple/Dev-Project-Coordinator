@@ -49,7 +49,8 @@ public struct HTTPResponse: Sendable {
 
     public static let securityHeaders: [String: String] = [
         "Content-Security-Policy": "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; connect-src 'self'; frame-ancestors 'none'",
-        "X-Content-Type-Options": "nosniff"
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer"
     ]
 
     public init(status: Int, reason: String, headers: [String: String] = [:], body: Data = Data()) {
@@ -125,22 +126,37 @@ public struct HTTPResponse: Sendable {
     }
 }
 
+private struct SignInCode: Sendable {
+    let hex: String
+    let createdAt: Date
+}
+
+enum PresentedToken: Equatable, Sendable {
+    case missing
+    case match
+    case mismatch
+}
+
 /// Loopback HTTP server for optional drag-and-drop. Bind is 127.0.0.1 only.
 public final class DeskServer: @unchecked Sendable {
     public static let maxBodyBytes = 65_536
     public static let socketTimeoutSeconds: Int = 5
     public static let defaultPort: UInt16 = 47_821
+    public static let signInCodeTTL: TimeInterval = 10 * 60
 
     public let bindHost: String
     public private(set) var port: UInt16
     public private(set) var token: String
     public let tokenFileURL: URL
+    /// Test seam for sign-in expiry. Production uses the system clock.
+    public var now: @Sendable () -> Date = { Date() }
     private let htmlProvider: @Sendable () -> String
     private let onMove: @Sendable (String, String) throws -> Void
     private let onAdd: @Sendable (String, String) throws -> Void
     private var listenFD: Int32 = -1
     private var running = false
     private let lock = NSLock()
+    private var signInCode: SignInCode?
 
     public init(
         knowledgeBasePath: String,
@@ -161,6 +177,7 @@ public final class DeskServer: @unchecked Sendable {
         try FileManager.default.createDirectory(at: desk, withIntermediateDirectories: true)
         self.tokenFileURL = desk.appendingPathComponent(".write-token")
         try Self.writeTokenFile(token: token, url: tokenFileURL)
+        _ = mintSignInCode()
     }
 
     public static func validateBindHost(_ host: String) throws {
@@ -252,6 +269,19 @@ public final class DeskServer: @unchecked Sendable {
         lock.lock()
         token = newToken
         lock.unlock()
+        _ = mintSignInCode()
+    }
+
+    /// Mint a fresh one-time sign-in code. Does not rotate the write token.
+    /// Replaces any unused previous code. Stored in memory only.
+    @discardableResult
+    public func mintSignInCode(at date: Date? = nil) -> String {
+        let hex = Self.randomToken()
+        let createdAt = date ?? now()
+        lock.lock()
+        signInCode = SignInCode(hex: hex, createdAt: createdAt)
+        lock.unlock()
+        return hex
     }
 
     public var plainURL: String {
@@ -259,7 +289,13 @@ public final class DeskServer: @unchecked Sendable {
     }
 
     public var signInURL: String {
-        "http://127.0.0.1:\(port)/?token=\(currentToken())"
+        "http://127.0.0.1:\(port)/?signin=\(currentSignInCode() ?? "")"
+    }
+
+    func currentSignInCode() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return signInCode?.hex
     }
 
     private func currentToken() -> String {
@@ -268,13 +304,38 @@ public final class DeskServer: @unchecked Sendable {
         return token
     }
 
+    /// Consume a presented sign-in code. First use or 10 minutes, whichever comes first.
+    func consumeSignInCode(_ presented: String, at date: Date? = nil) -> Bool {
+        let instant = date ?? now()
+        lock.lock()
+        defer { lock.unlock() }
+        guard let code = signInCode else { return false }
+        if instant.timeIntervalSince(code.createdAt) > Self.signInCodeTTL {
+            signInCode = nil
+            return false
+        }
+        guard Self.tokensEqual(presented, code.hex) else { return false }
+        signInCode = nil
+        return true
+    }
+
     public static func resolvePort(
         configPort: UInt16? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> UInt16 {
-        if let raw = environment["DPC_DESK_PORT"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-           let parsed = UInt16(raw), parsed > 0 {
-            return parsed
+        if let raw = environment["DPC_DESK_PORT"] {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let parsed = UInt16(trimmed), parsed > 0 {
+                return parsed
+            }
+            let shown = trimmed.isEmpty ? "(empty)" : trimmed
+            let fallback: UInt16
+            if let configPort, configPort > 0 {
+                fallback = configPort
+            } else {
+                fallback = defaultPort
+            }
+            CPCLog.warning("Ignoring invalid DPC_DESK_PORT=\(shown); using \(fallback)")
         }
         if let configPort, configPort > 0 {
             return configPort
@@ -343,12 +404,14 @@ public final class DeskServer: @unchecked Sendable {
 
         if method == "GET" {
             if path == "/" || path == "/index" || path == "/index.html" {
-                if let presented = query["token"] {
-                    let current = currentToken()
-                    guard Self.tokensEqual(presented, current) else {
+                if query["token"] != nil {
+                    return HTTPResponse.text(401, "Unauthorized", "bad token")
+                }
+                if let presented = query["signin"] {
+                    guard consumeSignInCode(presented) else {
                         return HTTPResponse.text(401, "Unauthorized", "bad token")
                     }
-                    return HTTPResponse.redirect(location: "/", setCookie: Self.tokenCookie(current))
+                    return HTTPResponse.redirect(location: "/", setCookie: Self.tokenCookie(currentToken()))
                 }
                 return HTTPResponse.html(htmlProvider())
             }
@@ -426,32 +489,42 @@ public final class DeskServer: @unchecked Sendable {
         if !Self.hostAllowed(request.headers["host"], port: port) {
             return HTTPResponse.text(403, "Forbidden", "host rejected")
         }
-        let presented = presentedToken(request)
-        guard let presented, Self.tokensEqual(presented, currentToken()) else {
-            if presented == nil {
-                return HTTPResponse.text(401, "Unauthorized", "missing token")
-            }
+        switch presentedToken(request) {
+        case .missing:
+            return HTTPResponse.text(401, "Unauthorized", "missing token")
+        case .mismatch:
             return HTTPResponse.text(401, "Unauthorized", "bad token")
+        case .match:
+            return nil
         }
-        return nil
     }
 
-    private func presentedToken(_ request: HTTPRequest) -> String? {
+    /// Header first, then any `dpc_token` cookie (constant-time compare for each), then JSON body.
+    func presentedToken(_ request: HTTPRequest) -> PresentedToken {
+        let current = currentToken()
         if let header = request.headers["x-dpc-token"], !header.isEmpty {
-            return header
+            return Self.tokensEqual(header, current) ? .match : .mismatch
         }
         if let cookie = request.headers["cookie"] {
+            var sawToken = false
+            var matched = false
             for part in cookie.split(separator: ";") {
                 let item = part.trimmingCharacters(in: .whitespaces)
-                if item.hasPrefix("dpc_token=") {
-                    return String(item.dropFirst("dpc_token=".count))
+                guard item.hasPrefix("dpc_token=") else { continue }
+                sawToken = true
+                let value = String(item.dropFirst("dpc_token=".count))
+                if Self.tokensEqual(value, current) {
+                    matched = true
                 }
+            }
+            if sawToken {
+                return matched ? .match : .mismatch
             }
         }
         if let json = Self.jsonObject(request.body), let token = json["token"], !token.isEmpty {
-            return token
+            return Self.tokensEqual(token, current) ? .match : .mismatch
         }
-        return nil
+        return .missing
     }
 
     public static func originAllowed(_ origin: String?, port: UInt16) -> Bool {

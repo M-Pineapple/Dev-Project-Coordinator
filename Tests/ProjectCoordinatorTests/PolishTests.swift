@@ -37,6 +37,8 @@ struct PolishDeskPageTests {
         #expect(html.contains("lifting"))
         #expect(html.contains("kcard-ph"))
         #expect(html.contains("toast"))
+        #expect(html.contains("aria-busy"))
+        #expect(html.contains("removeAttribute('aria-busy')"))
     }
 
     @Test("kanban cards show chips and hide raw ids")
@@ -98,6 +100,8 @@ struct PolishDeskPageTests {
         )
         let html = DeskPage.render(projects: [project], board: Board(cards: [safe]), now: now)
         #expect(html.contains("href=\"https://example.com/acme/app/pull/9\""))
+        #expect(html.contains("rel=\"noopener noreferrer\""))
+        #expect(html.contains("target=\"_blank\""))
         #expect(html.contains("PR 9"))
 
         let evil = Card(
@@ -111,6 +115,18 @@ struct PolishDeskPageTests {
         let blocked = DeskPage.render(projects: [project], board: Board(cards: [evil]), now: now)
         #expect(!blocked.contains("href=\"javascript:"))
         #expect(blocked.contains("kchip kpr"))
+
+        let http = Card(
+            id: "cdddddddddddd",
+            project: "App",
+            title: "HTTP",
+            column: "review",
+            order: 2,
+            linkedPR: "http://example.com/acme/app/pull/9"
+        )
+        let httpHTML = DeskPage.render(projects: [project], board: Board(cards: [http]), now: now)
+        #expect(!httpHTML.contains("href=\"http://"))
+        #expect(httpHTML.contains("kchip kpr"))
     }
 }
 
@@ -124,6 +140,9 @@ struct PolishDeskServerTests {
         #expect(DeskServer.resolvePort(configPort: 49_000, environment: ["DPC_DESK_PORT": "48001"]) == 48_001)
         #expect(DeskServer.resolvePort(environment: ["DPC_DESK_PORT": "0"]) == 47_821)
         #expect(DeskServer.resolvePort(configPort: 0, environment: [:]) == 47_821)
+        #expect(DeskServer.resolvePort(configPort: 49_000, environment: ["DPC_DESK_PORT": "nope"]) == 49_000)
+        #expect(DeskServer.resolvePort(environment: ["DPC_DESK_PORT": "abc"]) == 47_821)
+        #expect(DeskServer.resolvePort(environment: ["DPC_DESK_PORT": ""]) == 47_821)
     }
 
     @Test("old security-config JSON without deskPort still loads")
@@ -160,30 +179,48 @@ struct PolishDeskServerTests {
         let body = Data(#"{"id":"cabcabcabcab","column":"done"}"#.utf8)
 
         #expect(!server.plainURL.contains("token"))
+        #expect(!server.plainURL.contains("signin"))
         #expect(server.plainURL.hasSuffix("/"))
-        #expect(server.signInURL.contains("?token="))
+        #expect(server.signInURL.contains("?signin="))
+        #expect(!server.signInURL.contains("?token="))
         #expect(server.signInURL.hasPrefix(server.plainURL))
+        let code = try #require(server.currentSignInCode())
+        #expect(code.count == 64)
+        #expect(!server.signInURL.contains(server.token))
 
         let page = server.handleForTests(
             HTTPRequest(method: "GET", path: "/", headers: ["host": hostOK], body: Data())
         )
         #expect(page.status == 200)
         #expect(page.headers["Set-Cookie"] == nil)
+        #expect(page.headers["Referrer-Policy"] == "no-referrer")
+
+        let tokenRoute = server.handleForTests(
+            HTTPRequest(
+                method: "GET",
+                path: "/?token=\(server.token)",
+                headers: ["host": hostOK],
+                body: Data()
+            )
+        )
+        #expect(tokenRoute.status == 401)
+        #expect(tokenRoute.headers["Set-Cookie"] == nil)
 
         let badSignIn = server.handleForTests(
             HTTPRequest(
                 method: "GET",
-                path: "/?token=nope",
+                path: "/?signin=nope",
                 headers: ["host": hostOK],
                 body: Data()
             )
         )
         #expect(badSignIn.status == 401)
+        #expect(badSignIn.headers["Set-Cookie"] == nil)
 
         let signIn = server.handleForTests(
             HTTPRequest(
                 method: "GET",
-                path: "/?token=\(server.token)",
+                path: "/?signin=\(code)",
                 headers: ["host": hostOK],
                 body: Data()
             )
@@ -322,6 +359,7 @@ struct PolishDeskServerTests {
             onAdd: { _, _ in }
         )
         let original = server.token
+        let originalCode = try #require(server.currentSignInCode())
         try server.start()
         defer { server.stop() }
         try server.rotateToken()
@@ -331,21 +369,32 @@ struct PolishDeskServerTests {
         let perms = attrs[.posixPermissions] as? NSNumber
         #expect(perms?.int16Value == 0o600)
         #expect(try String(contentsOf: server.tokenFileURL, encoding: .utf8) == server.token)
+        let newCode = try #require(server.currentSignInCode())
+        #expect(newCode != originalCode)
 
         let host = "127.0.0.1:\(server.port)"
         let oldSignIn = server.handleForTests(
             HTTPRequest(
                 method: "GET",
-                path: "/?token=\(original)",
+                path: "/?signin=\(originalCode)",
                 headers: ["host": host],
                 body: Data()
             )
         )
         #expect(oldSignIn.status == 401)
-        let newSignIn = server.handleForTests(
+        let tokenRoute = server.handleForTests(
             HTTPRequest(
                 method: "GET",
                 path: "/?token=\(server.token)",
+                headers: ["host": host],
+                body: Data()
+            )
+        )
+        #expect(tokenRoute.status == 401)
+        let newSignIn = server.handleForTests(
+            HTTPRequest(
+                method: "GET",
+                path: "/?signin=\(newCode)",
                 headers: ["host": host],
                 body: Data()
             )
@@ -378,11 +427,21 @@ struct PolishDeskServerTests {
                 let firstLine = message.split(separator: "\n").first.map(String.init) ?? ""
                 #expect(firstLine == "http://127.0.0.1:\(port)/")
                 #expect(!firstLine.contains("token"))
-                #expect(message.contains("?token="))
-                #expect(message.contains("Sign-in"))
+                #expect(!firstLine.contains("signin"))
+                #expect(message.contains("?signin="))
+                #expect(!message.contains("?token="))
+                #expect(message.contains("valid once, for 10 minutes"))
+                #expect(message.contains("Write token file:"))
+                let firstCode = signInCode(from: message)
+                let minted = try await manager.startDeskServer()
+                #expect(!minted.contains("Write token rotated."))
+                let secondCode = signInCode(from: minted)
+                #expect(secondCode != firstCode)
+                #expect(minted.contains("valid once, for 10 minutes"))
                 let rotated = try await manager.startDeskServer(rotate: true)
                 #expect(rotated.contains("Write token rotated."))
                 #expect(rotated.contains("http://127.0.0.1:\(port)/"))
+                #expect(signInCode(from: rotated) != secondCode)
                 return
             } catch let error as DeskServerError {
                 if case .portInUse = error {
@@ -394,4 +453,11 @@ struct PolishDeskServerTests {
         }
         throw lastError ?? DeskServerError.portInUse(0)
     }
+}
+
+private func signInCode(from message: String) -> String? {
+    guard let range = message.range(of: "?signin=") else { return nil }
+    let rest = message[range.upperBound...]
+    let end = rest.firstIndex(where: { $0.isWhitespace || $0 == "\n" }) ?? rest.endIndex
+    return String(rest[..<end])
 }

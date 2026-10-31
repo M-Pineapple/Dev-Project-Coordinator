@@ -199,6 +199,7 @@ public enum DeskPage {
     .count-pill { font-size:.72rem; font-variant-numeric:tabular-nums; min-width:1.4rem; text-align:center; border-radius:999px; padding:.12rem .45rem; background:var(--bg); border:1px solid var(--line); color:var(--ink); }
     .kcard { border:1px solid var(--line); border-radius:8px; padding:.55rem .6rem .5rem; margin:0 0 .5rem; background:var(--bg); transition: transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s cubic-bezier(.22,1,.36,1); }
     .kcard[draggable="true"] { cursor:grab; }
+    .kcard[aria-busy="true"] { pointer-events:none; opacity:.72; cursor:progress; }
     .kcard:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .kcard.lifting { transform: rotate(-9deg) scale(1.04); box-shadow: 0 22px 36px -16px rgba(28,25,20,.5); z-index:2; }
     .kcard-ph { border:1.5px dashed var(--accent); border-radius:8px; min-height:3.1rem; margin:0 0 .5rem; background:color-mix(in oklab, var(--accent) 10%, transparent); }
@@ -708,8 +709,8 @@ public enum DeskPage {
         let last = trimmed.split(separator: "/").last.map(String.init) ?? trimmed
         let label = last.allSatisfy(\.isNumber) ? "PR \(last)" : (trimmed.lowercased().hasPrefix("pr") ? trimmed : "PR \(trimmed)")
         let escapedLabel = HTMLEscape.escape(label)
-        if let url = URL(string: trimmed), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
-            return "<a class=\"kchip kpr\" href=\"\(HTMLEscape.escape(trimmed))\">\(escapedLabel)</a>"
+        if let url = URL(string: trimmed), url.scheme?.lowercased() == "https" {
+            return "<a class=\"kchip kpr\" href=\"\(HTMLEscape.escape(trimmed))\" rel=\"noopener noreferrer\" target=\"_blank\">\(escapedLabel)</a>"
         }
         return "<span class=\"kchip kpr\">\(escapedLabel)</span>"
     }
@@ -817,11 +818,13 @@ public enum DeskPage {
           });
         }
         async function moveCard(card, column){
+          if(card.getAttribute('aria-busy')==='true') return;
           const id=card.dataset.id;
           const from=columnOf(card);
           const next=card.nextElementSibling;
           const dest=document.querySelector('.col[data-column="'+CSS.escape(column)+'"]');
           if(!dest || !from) return;
+          card.setAttribute('aria-busy','true');
           dest.querySelectorAll('.kcard-ph').forEach(p=>p.remove());
           dest.appendChild(card);
           updateCounts();
@@ -833,11 +836,14 @@ public enum DeskPage {
             else from.appendChild(card);
             updateCounts();
             toast('Move failed. Card returned.');
+          }finally{
+            card.removeAttribute('aria-busy');
           }
         }
         let dragCard=null;
         document.querySelectorAll('.kcard[draggable]').forEach(card=>{
           card.addEventListener('dragstart',e=>{
+            if(card.getAttribute('aria-busy')==='true'){ e.preventDefault(); return; }
             dragCard=card;
             e.dataTransfer.setData('text/plain', card.dataset.id);
             e.dataTransfer.effectAllowed='move';
@@ -849,6 +855,7 @@ public enum DeskPage {
             dragCard=null;
           });
           card.addEventListener('keydown',e=>{
+            if(card.getAttribute('aria-busy')==='true'){ e.preventDefault(); return; }
             const cols=[...document.querySelectorAll('.col[data-column]')];
             const col=columnOf(card);
             const ci=cols.indexOf(col);

@@ -374,8 +374,19 @@ public struct SecurityConfig: Codable, Sendable {
         maxNotesLength = try container.decode(Int.self, forKey: .maxNotesLength)
         maxSearchPatternLength = try container.decode(Int.self, forKey: .maxSearchPatternLength)
         enableValidation = try container.decode(Bool.self, forKey: .enableValidation)
-        let port = try container.decodeIfPresent(UInt16.self, forKey: .deskPort) ?? DeskServer.defaultPort
-        deskPort = port == 0 ? DeskServer.defaultPort : port
+        deskPort = Self.decodeDeskPort(from: container)
+    }
+
+    /// Invalid or out-of-range `deskPort` is ignored with a warning. Other fields stay.
+    private static func decodeDeskPort(from container: KeyedDecodingContainer<CodingKeys>) -> UInt16 {
+        guard container.contains(.deskPort) else {
+            return DeskServer.defaultPort
+        }
+        if let port = try? container.decode(UInt16.self, forKey: .deskPort), port > 0 {
+            return port
+        }
+        CPCLog.warning("Ignoring invalid deskPort in security-config.json; using \(DeskServer.defaultPort)")
+        return DeskServer.defaultPort
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -401,14 +412,17 @@ public struct SecurityConfig: Codable, Sendable {
     
     /// Load configuration from file, creating default if none exists
     public static func load(from path: String) -> SecurityConfig {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-              let config = try? JSONDecoder().decode(SecurityConfig.self, from: data) else {
-            // Create default config file
-            let defaultConfig = SecurityConfig.default
-            try? defaultConfig.save(to: path)
-            return defaultConfig
+        let url = URL(fileURLWithPath: path)
+        if let data = try? Data(contentsOf: url) {
+            if let config = try? JSONDecoder().decode(SecurityConfig.self, from: data) {
+                return config
+            }
+            CPCLog.warning("Could not decode security-config.json at \(path); using defaults without rewriting the file")
+            return SecurityConfig.default
         }
-        return config
+        let defaultConfig = SecurityConfig.default
+        try? defaultConfig.save(to: path)
+        return defaultConfig
     }
     
     /// Save configuration to file

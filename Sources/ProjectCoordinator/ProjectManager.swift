@@ -518,6 +518,8 @@ public actor ProjectManager {
         if let deskServer, deskServer.isRunning {
             if rotate {
                 try deskServer.rotateToken()
+            } else {
+                _ = deskServer.mintSignInCode()
             }
             return Self.deskServerMessage(server: deskServer, rotated: rotate)
         }
@@ -552,10 +554,11 @@ public actor ProjectManager {
         let rotation = rotated ? "Write token rotated.\n" : ""
         return """
         \(rotation)\(server.plainURL)
-        Sign-in (open once in Safari, then File > Add to Dock): \(server.signInURL)
+        Sign-in URL (valid once, for 10 minutes): \(server.signInURL)
         Write token file: \(server.tokenFileURL.path) (mode 0600)
         Port is fixed. If it is busy, start fails. Set DPC_DESK_PORT or security-config deskPort.
-        Writes accept the cookie from sign-in or the X-DPC-Token header.
+        The session cookie is the write token. Rotation writes a new token file and invalidates existing cookies.
+        Writes accept that cookie or the X-DPC-Token header.
         Static KnowledgeBase/desk/index.html still works without this server.
         """
     }

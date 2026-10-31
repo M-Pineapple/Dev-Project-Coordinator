@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security allowlist honours `security-config.json` and `DPC_ALLOWED_PATHS`
 - `~/Desktop` is not an allowed root by default (only `~/Desktop/Development`); add it through `security-config.json` or `DPC_ALLOWED_PATHS` if you need it
 - README and Quick Start rewritten for the product
-- Desk server uses a fixed port and a one-time sign-in URL. The bookmark URL has no token
+- Desk server uses a fixed port and a one-time sign-in code (`?signin=`, valid once, for 10 minutes). The bookmark URL has no token. The write token is long-lived until rotation
 - Desk subtitle: nothing leaves this machine
 
 ### Fixed
@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Desk server checks Host on every request and rejects a Host header without a port
 - Desk server Host/Origin allowlist is IPv4 loopback only (`127.0.0.1` and `localhost`)
 - Desk token file is created 0600; path checks resolve symlinks and drop forbidden roots
+- Desk sign-in uses a single-use in-memory code. `?token=` is rejected. Calling `start_desk_server` while running mints a new code without rotating
+- Desk responses send `Referrer-Policy: no-referrer`. PR chips are https-only with `rel="noopener noreferrer"` and `target="_blank"`
+- Invalid `DPC_DESK_PORT` logs a warning and falls back. Invalid `deskPort` in security-config is ignored without rewriting the file
 
 ### Deprecated
 - `CPC_KNOWLEDGE_BASE` and the `project-coordinator` server key. Removal in v3.0

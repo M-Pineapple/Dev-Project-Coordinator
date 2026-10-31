@@ -193,6 +193,7 @@ struct RamboDeskServerTests {
         #expect(ok.headers["Set-Cookie"] == nil)
         #expect(ok.headers["Content-Security-Policy"]?.contains("default-src 'none'") == true)
         #expect(ok.headers["X-Content-Type-Options"] == "nosniff")
+        #expect(ok.headers["Referrer-Policy"] == "no-referrer")
 
         let health = server.handleForTests(
             HTTPRequest(
@@ -204,6 +205,7 @@ struct RamboDeskServerTests {
         )
         #expect(health.status == 200)
         #expect(health.headers["X-Content-Type-Options"] == "nosniff")
+        #expect(health.headers["Referrer-Policy"] == "no-referrer")
     }
 
     @Test("token compare is length-checked and jsonString emits valid JSON")
