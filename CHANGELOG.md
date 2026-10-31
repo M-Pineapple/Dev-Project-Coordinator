@@ -10,8 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0] - 2026-10-31
 
 ### Added
-- Multi-language detector (swift, python, javascript, typescript, go, rust, ruby, php, java, kotlin, csharp, cpp, web)
-- Non-coding project kinds with optional path
+- Multi-language detector (swift, python, javascript, typescript, node, go, rust, ruby, php, java, kotlin, csharp, dotnet, cpp, docker, web, plus spm / xcode-project / xcode-workspace / swiftui from a shallow scan)
+- Non-coding project kinds with optional path, including accounting and business
+- Analytics tab dashboard: project health gauges, 14-day activity heat map, technology trends, collapsible status timeline, shared with the MCP tools
+- Kind-aware health: non-coding projects are not penalised for missing code docs or a tech stack
 - Automatic register from working directory and git remote
 - Find-or-create, rename, and merge for non-coding work
 - Kanban cards and default columns backlog, doing, review, done, parked

@@ -7,6 +7,8 @@ public enum ProjectKind: String, Codable, Sendable, CaseIterable {
     case campaign
     case research
     case legal
+    case accounting
+    case business
     case personal
     case other
 }

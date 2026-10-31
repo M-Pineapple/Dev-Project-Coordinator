@@ -122,8 +122,8 @@ You want a specialised desk operator.
 | Capability | Detail |
 |---|---|
 | Compact summary | `get_desk_summary`, hard cap 800 tokens (~3,200 characters) |
-| Any language | Shallow detector: swift, python, javascript, typescript, go, rust, ruby, php, java, kotlin, csharp, cpp, web |
-| Non-coding kinds | writing, campaign, research, legal, personal, other. Path optional |
+| Any language | Shallow detector: swift, python, javascript, typescript, node, go, rust, ruby, php, java, kotlin, csharp, dotnet, cpp, docker, web, plus spm / xcode-project / xcode-workspace / swiftui from top-level files |
+| Non-coding kinds | writing, campaign, research, legal, accounting, business, personal, other. Path optional |
 | Auto-register | From cwd + git remote + optional open PR. Never creates folders. Adds a starter card |
 | Find or create | Normalised name match, near-duplicate guard, rename and merge. Adds a starter card |
 | Kanban | Columns backlog, doing, review, done, parked. Users may rename |
@@ -133,7 +133,19 @@ You want a specialised desk operator.
 
 ### Analytics tab
 
-Cards per column, stale cards (14 days), 7-day throughput into done, kind mix, parked count, and an attention list of five items. No emoji as data.
+The same JSON the MCP tools read, rendered as a local dashboard (file and live modes):
+
+| Section | What you see |
+|---|---|
+| Attention | Five items that need a look, ranked |
+| Board flow | Column mix, stale cards (14 days), 7-day throughput into done, parked count |
+| Kind mix | Coding vs writing, legal, accounting, and the rest |
+| Project health | 0–100 score per project, factors, recommendations, grouped critical / needs attention / healthy. Non-coding projects are not scored down for missing code docs or a tech stack |
+| Activity heat map | Per project, last 14 days, CSS intensity cells and a sparkline. Total events. No emoji |
+| Technology trends | Share bars, emerging tags (1–2 coding projects), adoption timeline. Coding projects only |
+| Project timeline | Created date, current status, time in each status. Collapsible per project |
+
+No emoji as data. No remote fonts or assets. Light and dark follow the system.
 
 ### Safety and storage
 
@@ -159,10 +171,10 @@ Cards per column, stale cards (14 days), 7-day throughput into done, kind mix, p
 | `update_project_status` | `projectName`, optional `status`, `notes` | Update the desk entry |
 | `search_desk` | `pattern` | Search notes, cards, kinds, markdown |
 | `search_code_patterns` | `pattern` | Deprecated alias of `search_desk` |
-| `get_project_timeline` | `projectName` | Status history |
-| `get_activity_heatmap` | optional `days` (default 7) | Activity counts |
-| `get_technology_trends` | — | Language tag counts |
-| `get_project_health` | — | Legacy 0–100 scores |
+| `get_project_timeline` | `projectName` | Status history and time in each status |
+| `get_activity_heatmap` | optional `days` (default 7) | Activity heat map (points, events, daily counts) |
+| `get_technology_trends` | — | Framework share, emerging tags, adoption timeline (coding only) |
+| `get_project_health` | — | 0–100 scores, factors, recommendations |
 | `open_desk` | — | Write `desk/index.html` and return its path |
 | `add_card` | `project`, `title`, optional `column`, `memoryRef`, `linkedPR` | Add a card |
 | `move_card` | `id`, `column` | Move a card |

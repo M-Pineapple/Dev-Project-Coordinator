@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import ProjectCoordinator
 
-private struct TempDesk {
+struct TempDesk {
     let root: URL
     let kb: URL
     let work: URL
@@ -57,7 +57,8 @@ struct ProjectDetectorTests {
 
         #expect(ProjectDetector.detect(at: swift.path).tags.contains("swift"))
         #expect(ProjectDetector.detect(at: python.path).tags.contains("python"))
-        #expect(ProjectDetector.detect(at: node.path).tags == ["javascript"])
+        #expect(ProjectDetector.detect(at: node.path).tags.contains("javascript"))
+        #expect(ProjectDetector.detect(at: node.path).tags.contains("node"))
         #expect(ProjectDetector.detect(at: docs.path).tags == ["unknown"])
         #expect(ProjectDetector.detect(at: docs.path).kind == .other)
     }

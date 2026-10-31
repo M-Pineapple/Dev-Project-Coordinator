@@ -112,7 +112,7 @@ public enum MCPBootstrap {
                         "name": stringProp("Project name"),
                         "path": stringProp("Optional folder path"),
                         "description": stringProp("Optional description"),
-                        "kind": stringProp("coding, writing, campaign, research, legal, personal, or other")
+                        "kind": stringProp("coding, writing, campaign, research, legal, accounting, business, personal, or other")
                     ],
                     required: ["name"]
                 )
@@ -139,7 +139,7 @@ public enum MCPBootstrap {
             ),
             Tool(
                 name: "get_activity_heatmap",
-                description: "Activity counts for recent days. Prefer get_desk_summary first.",
+                description: "Activity heat map for recent days. Scores and event counts. Prefer get_desk_summary first.",
                 inputSchema: objectSchema(
                     properties: ["days": .object(["type": .string("integer"), "description": .string("Days to analyse (default 7)")])],
                     required: []
@@ -147,12 +147,12 @@ public enum MCPBootstrap {
             ),
             Tool(
                 name: "get_technology_trends",
-                description: "Language and tag counts. Opt-in deep dive. Prefer get_desk_summary first.",
+                description: "Framework usage, emerging tags, and adoption timeline for coding projects. Prefer get_desk_summary first.",
                 inputSchema: objectSchema(properties: [:], required: [])
             ),
             Tool(
                 name: "get_project_health",
-                description: "Legacy 0-100 scores. Prefer get_desk_summary and the Analytics tab.",
+                description: "0-100 health scores with factors and recommendations. Prefer get_desk_summary and the Analytics tab.",
                 inputSchema: objectSchema(properties: [:], required: [])
             ),
             Tool(
@@ -228,7 +228,7 @@ public enum MCPBootstrap {
                 inputSchema: objectSchema(
                     properties: [
                         "name": stringProp("Project name inferred from context"),
-                        "kind": stringProp("writing, campaign, research, legal, personal, or other"),
+                        "kind": stringProp("writing, campaign, research, legal, accounting, business, personal, or other"),
                         "description": stringProp("Optional description")
                     ],
                     required: ["name"]
@@ -332,13 +332,28 @@ public enum MCPBootstrap {
 
         case "get_activity_heatmap":
             let days = arguments["days"]?.intValue ?? 7
-            return await analytics.getActivityHeatMap(days: days)
+            let report = AnalyticsEngine.heatMap(
+                projects: await projectManager.allProjects(),
+                records: await analytics.allRecords(),
+                days: max(days, 1)
+            )
+            return AnalyticsEngine.markdownHeatMap(report)
 
         case "get_technology_trends":
-            return await analytics.getTechnologyTrends()
+            return AnalyticsEngine.markdownTechTrends(
+                AnalyticsEngine.techTrends(
+                    projects: await projectManager.allProjects(),
+                    records: await analytics.allRecords()
+                )
+            )
 
         case "get_project_health":
-            return await analytics.getProjectHealthReport()
+            return AnalyticsEngine.markdownHealth(
+                AnalyticsEngine.health(
+                    projects: await projectManager.allProjects(),
+                    records: await analytics.allRecords()
+                )
+            )
 
         case "open_desk":
             return try await projectManager.openDesk()

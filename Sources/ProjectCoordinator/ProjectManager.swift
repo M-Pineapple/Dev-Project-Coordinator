@@ -68,7 +68,8 @@ public actor ProjectManager {
             "\(knowledgeBasePath)/templates",
             "\(knowledgeBasePath)/tools",
             "\(knowledgeBasePath)/patterns",
-            "\(knowledgeBasePath)/desk"
+            "\(knowledgeBasePath)/desk",
+            "\(knowledgeBasePath)/analytics"
         ]
         for directory in directories {
             try? fileManager.createDirectory(
@@ -309,6 +310,10 @@ public actor ProjectManager {
         )
         projects[name] = project
         try await saveProject(project)
+        if let analytics {
+            _ = await analytics.migrateProject(project)
+            try? await analytics.saveAnalytics()
+        }
         await updateProjectIndex()
         if let openPR, !openPR.isEmpty {
             _ = try await cardStore.addCard(
@@ -430,6 +435,9 @@ public actor ProjectManager {
         let oldSummary = "\(knowledgeBasePath)/projects/\(oldName)-summary.md"
         try? fileManager.removeItem(atPath: oldJSON)
         try? fileManager.removeItem(atPath: oldSummary)
+        if let analytics {
+            await analytics.renameProject(from: oldName, to: validatedNew)
+        }
         try await cardStore.reassignProject(from: oldName, to: validatedNew)
         await updateProjectIndex()
         try await regenerateDesk()
@@ -448,6 +456,9 @@ public actor ProjectManager {
         try await saveProject(targetProject)
         try? fileManager.removeItem(atPath: "\(knowledgeBasePath)/projects/\(source).json")
         try? fileManager.removeItem(atPath: "\(knowledgeBasePath)/projects/\(source)-summary.md")
+        if let analytics {
+            await analytics.mergeProject(source: source, into: target)
+        }
         try await cardStore.reassignProject(from: source, to: target)
         await updateProjectIndex()
         try await regenerateDesk()
@@ -514,28 +525,7 @@ public actor ProjectManager {
             bindHost: "127.0.0.1",
             port: 0,
             htmlProvider: {
-                // Snapshot is filled after start via regenerate; first GET rebuilds from files.
-                let projectsPath = kb + "/projects"
-                let files = (try? FileManager.default.contentsOfDirectory(atPath: projectsPath)) ?? []
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                var loaded: [Project] = []
-                for file in files where file.hasSuffix(".json") && !file.hasSuffix("-analytics.json") && !file.contains("EXAMPLE") {
-                    let url = URL(fileURLWithPath: projectsPath).appendingPathComponent(file)
-                    if let data = try? Data(contentsOf: url),
-                       let project = try? decoder.decode(Project.self, from: data) {
-                        loaded.append(project)
-                    }
-                }
-                let cardsURL = URL(fileURLWithPath: kb).appendingPathComponent("desk/cards.json")
-                let board: Board
-                if let data = try? Data(contentsOf: cardsURL),
-                   let decoded = try? decoder.decode(Board.self, from: data) {
-                    board = decoded
-                } else {
-                    board = Board()
-                }
-                return DeskPage.render(projects: loaded, board: board, mode: .live)
+                DeskPage.renderFromKnowledgeBase(knowledgeBasePath: kb, mode: .live)
             },
             onMove: { id, column in
                 try box.run { manager in
@@ -562,10 +552,15 @@ public actor ProjectManager {
     @discardableResult
     private func regenerateDesk() async throws -> URL {
         let board = await cardStore.snapshot()
+        if let analytics {
+            try? await analytics.saveAnalytics()
+        }
+        let records = await analytics?.allRecords() ?? []
         return try DeskPage.write(
             knowledgeBasePath: knowledgeBasePath,
             projects: allProjects(),
-            board: board
+            board: board,
+            records: records
         )
     }
 
