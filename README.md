@@ -15,6 +15,7 @@ Formerly Claude Project Coordinator.
 [![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](https://www.swift.org)
 [![Stars](https://img.shields.io/github/stars/M-Pineapple/Dev-Project-Coordinator)](https://github.com/M-Pineapple/Dev-Project-Coordinator/stargazers)
 [![M-Pineapple/Dev-Project-Coordinator MCP server](https://glama.ai/mcp/servers/M-Pineapple/Dev-Project-Coordinator/badges/score.svg)](https://glama.ai/mcp/servers/M-Pineapple/Dev-Project-Coordinator)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/mpineapple)
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/analytics-dark.png"><img src="docs/images/analytics-light.png" alt="Analytics tab of the local desk" width="720"/></picture>
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/kanban-dark.png"><img src="docs/images/kanban-light.png" alt="Kanban tab of the local desk" width="720"/></picture>
