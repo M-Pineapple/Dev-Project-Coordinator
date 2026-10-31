@@ -33,7 +33,7 @@ You may refresh a **private** Page from `get_desk_summary` as an Analytics view 
 Templates do not carry this server. After import, add a custom MCP named `dpc` (or `project-coordinator`) that runs the local binary:
 
 ```text
-/absolute/path/to/Claude-Project-Coordinator/.build/release/project-coordinator
+/absolute/path/to/Dev-Project-Coordinator/.build/release/project-coordinator
 ```
 
 On Grok Bot's cloud computer, sibling bots can read files. Prefer local-computer execution, or the Linux Docker image with `DPC_KNOWLEDGE_BASE` on that disk.

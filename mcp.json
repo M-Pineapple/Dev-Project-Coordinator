@@ -10,7 +10,7 @@
   "install": {
     "note": "Add the configuration below to your Claude Desktop / Cursor / Claude Code MCP settings. Server key project-coordinator still works; prefer dpc in new configs. Binary also available as dpc.",
     "config": {
-      "command": "/path/to/Claude-Project-Coordinator/.build/release/project-coordinator",
+      "command": "/path/to/Dev-Project-Coordinator/.build/release/project-coordinator",
       "args": []
     }
   }

@@ -11,10 +11,10 @@
 
 Formerly Claude Project Coordinator.
 
-[![Licence: Apache 2.0](https://img.shields.io/github/license/M-Pineapple/Claude-Project-Coordinator)](LICENSE)
+[![Licence: Apache 2.0](https://img.shields.io/github/license/M-Pineapple/Dev-Project-Coordinator)](LICENSE)
 [![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](https://www.swift.org)
-[![Stars](https://img.shields.io/github/stars/M-Pineapple/Claude-Project-Coordinator)](https://github.com/M-Pineapple/Claude-Project-Coordinator/stargazers)
-[![M-Pineapple/Claude-Project-Coordinator MCP server](https://glama.ai/mcp/servers/M-Pineapple/Claude-Project-Coordinator/badges/score.svg)](https://glama.ai/mcp/servers/M-Pineapple/Claude-Project-Coordinator)
+[![Stars](https://img.shields.io/github/stars/M-Pineapple/Dev-Project-Coordinator)](https://github.com/M-Pineapple/Dev-Project-Coordinator/stargazers)
+[![M-Pineapple/Dev-Project-Coordinator MCP server](https://glama.ai/mcp/servers/M-Pineapple/Dev-Project-Coordinator/badges/score.svg)](https://glama.ai/mcp/servers/M-Pineapple/Dev-Project-Coordinator)
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/analytics-dark.png"><img src="docs/images/analytics-light.png" alt="Analytics tab of the local desk" width="720"/></picture>
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/kanban-dark.png"><img src="docs/images/kanban-light.png" alt="Kanban tab of the local desk" width="720"/></picture>
@@ -35,8 +35,8 @@ Needs macOS 13+, Swift 6.0+ (Xcode 16+) and an MCP host (Claude Desktop, Cursor,
 1. Build:
 
    ```bash
-   git clone https://github.com/M-Pineapple/Claude-Project-Coordinator.git
-   cd Claude-Project-Coordinator
+   git clone https://github.com/M-Pineapple/Dev-Project-Coordinator.git
+   cd Dev-Project-Coordinator
    swift build -c release
    ```
 
@@ -46,7 +46,7 @@ Needs macOS 13+, Swift 6.0+ (Xcode 16+) and an MCP host (Claude Desktop, Cursor,
    {
      "mcpServers": {
        "project-coordinator": {
-         "command": "/absolute/path/to/Claude-Project-Coordinator/.build/release/project-coordinator",
+         "command": "/absolute/path/to/Dev-Project-Coordinator/.build/release/project-coordinator",
          "args": []
        }
      }
@@ -239,8 +239,8 @@ Agent: calls open_desk. You open KnowledgeBase/desk/index.html from disk.
 ### Build from source
 
 ```bash
-git clone https://github.com/M-Pineapple/Claude-Project-Coordinator.git
-cd Claude-Project-Coordinator
+git clone https://github.com/M-Pineapple/Dev-Project-Coordinator.git
+cd Dev-Project-Coordinator
 swift build -c release
 ```
 
@@ -266,7 +266,7 @@ Register the same `command` path.
 ### Grok Build
 
 ```bash
-grok mcp add dpc -- /absolute/path/to/Claude-Project-Coordinator/.build/release/project-coordinator
+grok mcp add dpc -- /absolute/path/to/Dev-Project-Coordinator/.build/release/project-coordinator
 ```
 
 ### Grok Bot
@@ -312,7 +312,7 @@ You may refresh a **private** Page from `get_desk_summary` as an Analytics view 
 Templates do not carry this server. After import, add a custom MCP named `dpc` (or `project-coordinator`) that runs the local binary:
 
 ```text
-/absolute/path/to/Claude-Project-Coordinator/.build/release/project-coordinator
+/absolute/path/to/Dev-Project-Coordinator/.build/release/project-coordinator
 ```
 
 On Grok Bot's cloud computer, sibling bots can read files. Prefer local-computer execution, or the Linux Docker image with `DPC_KNOWLEDGE_BASE` on that disk.
@@ -366,7 +366,7 @@ Pass-through to Trello, Asana, or Jira is out of this release. Use those vendors
 ## Project structure
 
 ```text
-Claude-Project-Coordinator/
+Dev-Project-Coordinator/
 ├── Sources/
 │   ├── ProjectCoordinator/     # Library
 │   ├── project-coordinator/    # Executable
