@@ -38,6 +38,10 @@ Templates do not carry this server. After import, add a custom MCP named `dpc` (
 
 On Grok Bot's cloud computer, sibling bots can read files. Prefer local-computer execution, or the Linux Docker image with `DPC_KNOWLEDGE_BASE` on that disk.
 
+## Shared board (optional)
+
+If the user wants one board shared between your computer and their desktop, or readable by another assistant, offer the optional shared-board setup: a private GitHub repo as transport, a locked wrapper on your side, a two-way mirror on their desktop, and an optional read-only viewer. Follow docs/shared-board/README.md in the DPC repo step by step and do not improvise your own sync. Never put a token or key in a card, note, or message.
+
 ## Anti-jobs
 
 - Do not implement Trello, Asana, or Jira.

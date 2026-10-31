@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Copy to ~/Library/LaunchAgents/io.example.dpc-mirror.plist and replace <home>. -->
+<plist version="1.0"><dict>
+<key>Label</key><string>io.example.dpc-mirror</string>
+<key>ProgramArguments</key><array><string>/usr/bin/python3</string><string><home>/.local/bin/dpc-mirror-sync.py</string><string>--debounce</string></array>
+<key>WatchPaths</key><array><string><home>/DPC-mirror/desk</string></array>
+<key>StartInterval</key><integer>120</integer>
+<key>ThrottleInterval</key><integer>5</integer>
+<key>RunAtLoad</key><true/>
+<key>StandardOutPath</key><string><home>/Library/Logs/dpc-mirror.log</string>
+<key>StandardErrorPath</key><string><home>/Library/Logs/dpc-mirror.log</string>
+</dict></plist>
