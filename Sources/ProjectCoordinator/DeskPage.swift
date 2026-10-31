@@ -188,7 +188,7 @@ public enum DeskPage {
     th, td { text-align:left; padding:.42rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
     th { font-size:.75rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); font-weight:600; }
     .board { display:flex; gap:.75rem; overflow-x:auto; align-items:stretch; padding-bottom:.35rem; }
-    .col { min-width:15.5rem; min-height:12rem; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.65rem; border-top:3px solid var(--col-accent, var(--muted)); }
+    .col { flex:1 1 0; min-width:11.5rem; min-height:12rem; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.65rem; border-top:3px solid var(--col-accent, var(--muted)); }
     .col h3 { margin:0 0 .5rem; font-size:.95rem; display:flex; justify-content:space-between; align-items:center; gap:.5rem; }
     .col[data-accent="0"] { --col-accent: var(--muted); }
     .col[data-accent="1"] { --col-accent: var(--accent); }

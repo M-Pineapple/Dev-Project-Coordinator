@@ -16,8 +16,8 @@ Formerly Claude Project Coordinator.
 [![Stars](https://img.shields.io/github/stars/M-Pineapple/Claude-Project-Coordinator)](https://github.com/M-Pineapple/Claude-Project-Coordinator/stargazers)
 [![M-Pineapple/Claude-Project-Coordinator MCP server](https://glama.ai/mcp/servers/M-Pineapple/Claude-Project-Coordinator/badges/score.svg)](https://glama.ai/mcp/servers/M-Pineapple/Claude-Project-Coordinator)
 
-<img src="docs/images/analytics-light.png" alt="Analytics tab of the local desk" width="720"/>
-<img src="docs/images/kanban-light.png" alt="Kanban tab of the local desk" width="720"/>
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/analytics-dark.png"><img src="docs/images/analytics-light.png" alt="Analytics tab of the local desk" width="720"/></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/kanban-dark.png"><img src="docs/images/kanban-light.png" alt="Kanban tab of the local desk" width="720"/></picture>
 <img src="docs/images/drag.gif" alt="Dragging a card on the local Kanban" width="720"/>
 
 </div>
@@ -372,7 +372,7 @@ Claude-Project-Coordinator/
 ├── Tests/ProjectCoordinatorTests/
 ├── KnowledgeBase/              # Patterns, templates, local JSON
 ├── docs/grok-bot/              # Paste-in prompt and skill
-├── docs/images/                # Logo, favicon, screenshot placeholders
+├── docs/images/                # Logo, favicon, icons, screenshots
 ├── scripts/
 ├── Package.swift
 └── README.md
