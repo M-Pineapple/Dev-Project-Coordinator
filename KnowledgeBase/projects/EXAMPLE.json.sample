@@ -1,9 +1,14 @@
 {
-  "name": "ExampleWeatherApp",
-  "path": "~/Developer/ExampleWeatherApp",
-  "description": "Example iOS weather application using SwiftUI and Core Location",
-  "techStack": ["SwiftUI", "Core Location", "Async/Await"],
-  "status": "In Development",
-  "notes": "This is an example project file to show the data structure. Your actual projects will be stored here but are gitignored for privacy.",
-  "lastUpdated": "2025-06-01T18:00:00Z"
+  "name": "ExampleApp",
+  "path": "~/Developer/ExampleApp",
+  "description": "Synthetic sample. Copy to ExampleApp.json and edit.",
+  "status": "Active",
+  "notes": null,
+  "techStack": ["swift"],
+  "lastModified": "2026-01-15T12:00:00Z",
+  "currentTasks": [],
+  "kind": "coding",
+  "repoURL": null,
+  "currentBranch": null,
+  "openPR": null
 }

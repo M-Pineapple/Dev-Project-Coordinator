@@ -12,6 +12,9 @@ KnowledgeBase/analytics/*.json
 # Auto-generated security configuration
 KnowledgeBase/security-config.json
 
+# Generated desk page, cards, and write token
+KnowledgeBase/desk/
+
 # User-specific Xcode data
 .swiftpm/xcode/xcuserdata/
 xcuserdata/

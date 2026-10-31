@@ -1,8 +1,8 @@
-# Claude Project Coordinator
+# Dev Project Coordinator
 
-Swift MCP server for tracking Xcode/Swift projects. Local JSON knowledge base.
-Complements Memory Service (project status vs conversational context). No money-path
-boundary. Public MIT under M-Pineapple.
+Swift MCP server for a local project desk (coding and non-coding). Local JSON
+knowledge base. Complements a memory/RAG product (live state vs why). No money-path
+boundary. Public MIT under M-Pineapple. Formerly Claude Project Coordinator.
 
 ## Governance
 
@@ -30,9 +30,10 @@ swift build -c release
 swift test
 ```
 
-Executable: `.build/release/project-coordinator`
+Executable: `.build/release/project-coordinator` (alias `.build/release/dpc`)
 
-Optional: `CPC_KNOWLEDGE_BASE=/path/to/KnowledgeBase` overrides data location.
+Optional: `DPC_KNOWLEDGE_BASE=/path/to/KnowledgeBase` overrides data location.
+`CPC_KNOWLEDGE_BASE` still works through v2.x. If both are set, DPC wins.
 
 ## Gotchas
 

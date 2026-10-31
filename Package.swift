@@ -11,6 +11,10 @@ let package = Package(
             name: "project-coordinator",
             targets: ["project-coordinator"]
         ),
+        .executable(
+            name: "dpc",
+            targets: ["dpc"]
+        ),
         .library(
             name: "ProjectCoordinator",
             targets: ["ProjectCoordinator"]
@@ -34,6 +38,14 @@ let package = Package(
                 .product(name: "MCP", package: "swift-sdk"),
             ],
             path: "Sources/project-coordinator"
+        ),
+        .executableTarget(
+            name: "dpc",
+            dependencies: [
+                "ProjectCoordinator",
+                .product(name: "MCP", package: "swift-sdk"),
+            ],
+            path: "Sources/dpc"
         ),
         .testTarget(
             name: "ProjectCoordinatorTests",

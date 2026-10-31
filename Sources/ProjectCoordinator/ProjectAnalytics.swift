@@ -91,7 +91,7 @@ struct TechnologyStats: Codable {
 public struct ProjectWithAnalytics: Codable, Sendable {
     // Original project fields
     let name: String
-    let path: String
+    let path: String?
     var description: String?
     var status: String?
     var notes: String?
@@ -127,7 +127,7 @@ public struct ProjectWithAnalytics: Codable, Sendable {
     }
     
     // Direct initializer for new projects
-    init(name: String, path: String, description: String?, status: String?, notes: String?, 
+    init(name: String, path: String?, description: String?, status: String?, notes: String?,
          techStack: [String], lastModified: Date, currentTasks: [String]) {
         self.name = name
         self.path = path

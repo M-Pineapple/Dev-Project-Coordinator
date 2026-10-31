@@ -9,12 +9,98 @@ public struct SecurityValidator {
     // Allowed project directory patterns (expandable)
     public static let allowedBasePaths = [
         NSHomeDirectory() + "/Developer",
-        NSHomeDirectory() + "/Documents", 
+        NSHomeDirectory() + "/Documents",
         NSHomeDirectory() + "/GitHub",
         NSHomeDirectory() + "/Projects",
         NSHomeDirectory() + "/Desktop/Development",
         NSHomeDirectory() + "/Xcode"
     ]
+
+    /// Union of compiled roots, config JSON, extra test roots, and `DPC_ALLOWED_PATHS`.
+    /// Config and env roots of `/`, the home directory, or `~/Library`, `~/.ssh`,
+    /// `~/.gnupg`, `~/.aws` are dropped. `security-config.json` is trusted input.
+    public static func effectiveAllowedBasePaths(
+        config: SecurityConfig? = nil,
+        extra: [String] = []
+    ) -> [String] {
+        var roots = allowedBasePaths.map { resolvedPath($0) }
+        var candidates: [String] = []
+        if let config {
+            candidates.append(contentsOf: config.allowedPaths)
+        }
+        candidates.append(contentsOf: extra)
+        if let env = ProcessInfo.processInfo.environment["DPC_ALLOWED_PATHS"] {
+            for part in env.split(separator: ":") {
+                let item = String(part).trimmingCharacters(in: .whitespaces)
+                if !item.isEmpty { candidates.append(item) }
+            }
+        }
+        for item in candidates {
+            let trimmed = item.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            if isForbiddenRoot(trimmed) {
+                CPCLog.warning("Ignoring forbidden allowed root: \(trimmed)")
+                continue
+            }
+            roots.append(resolvedPath(trimmed))
+        }
+        var seen = Set<String>()
+        return roots.filter { seen.insert($0).inserted }
+    }
+
+    /// Expand a leading `~` only. A tilde later in the path is left alone.
+    public static func expandPath(_ path: String) -> String {
+        let expanded: String
+        if path == "~" {
+            expanded = NSHomeDirectory()
+        } else if path.hasPrefix("~/") {
+            expanded = NSHomeDirectory() + String(path.dropFirst(1))
+        } else {
+            expanded = path
+        }
+        return URL(fileURLWithPath: expanded).standardized.path
+    }
+
+    public static func resolvedPath(_ path: String) -> String {
+        let expanded = expandPath(path)
+        let url = URL(fileURLWithPath: expanded)
+        if FileManager.default.fileExists(atPath: url.path) {
+            return url.resolvingSymlinksInPath().path
+        }
+        var current = url
+        while current.path != "/", !current.path.isEmpty {
+            let parent = current.deletingLastPathComponent()
+            if FileManager.default.fileExists(atPath: parent.path) {
+                let resolvedParent = parent.resolvingSymlinksInPath()
+                let remainder = url.pathComponents.dropFirst(parent.pathComponents.count)
+                return remainder.reduce(resolvedParent) { partial, component in
+                    partial.appendingPathComponent(component)
+                }.path
+            }
+            current = parent
+        }
+        return url.standardized.path
+    }
+
+    /// `/`, the home directory, and selected secret locations are never roots.
+    public static func isForbiddenRoot(_ path: String) -> Bool {
+        let resolved = resolvedPath(path)
+        if resolved == "/" { return true }
+        let home = URL(fileURLWithPath: NSHomeDirectory()).resolvingSymlinksInPath().path
+        if resolved == home { return true }
+        let forbidden = [
+            home + "/Library",
+            home + "/.ssh",
+            home + "/.gnupg",
+            home + "/.aws"
+        ]
+        for prefix in forbidden {
+            if resolved == prefix || resolved.hasPrefix(prefix + "/") {
+                return true
+            }
+        }
+        return false
+    }
     
     // Maximum lengths to prevent DoS and maintain reasonable limits
     public static let maxProjectNameLength = 100
@@ -26,7 +112,10 @@ public struct SecurityValidator {
     // MARK: - Path Validation
     
     /// Validates and sanitizes a project path
-    public static func validateProjectPath(_ path: String) throws -> String {
+    public static func validateProjectPath(
+        _ path: String,
+        allowedBasePaths: [String] = SecurityValidator.allowedBasePaths
+    ) throws -> String {
         // Basic length check
         guard !path.isEmpty else {
             throw SecurityError.emptyPath
@@ -36,37 +125,31 @@ public struct SecurityValidator {
             throw SecurityError.pathTooLong
         }
         
-        // Expand tilde to home directory
-        let expandedPath = path.replacingOccurrences(of: "~", with: NSHomeDirectory())
-        
-        // Normalize path (removes . and .. components safely)
+        let expandedPath = expandPath(path)
         let normalizedPath = URL(fileURLWithPath: expandedPath).standardized.path
-        
-        // Check for obvious path traversal attempts
+        let resolvedCandidate = resolvedPath(path)
+
         let dangerousPatterns = ["../", "..\\", "/..", "\\..", "..%2F", "..%5C"]
         for pattern in dangerousPatterns {
             guard !path.contains(pattern) && !normalizedPath.contains(pattern) else {
                 throw SecurityError.pathTraversalDetected
             }
         }
-        
-        // Verify it's within allowed directories (project path must be under a base path).
-        // Exact match of a base path, or prefix of "base/" — never the reverse
-        // (which previously allowed the entire home directory).
+
         let isAllowed = allowedBasePaths.contains { basePath in
-            let standardizedBase = URL(fileURLWithPath: basePath).standardized.path
-            if normalizedPath == standardizedBase {
+            let standardizedBase = resolvedPath(basePath)
+            if resolvedCandidate == standardizedBase {
                 return true
             }
             let prefix = standardizedBase.hasSuffix("/") ? standardizedBase : standardizedBase + "/"
-            return normalizedPath.hasPrefix(prefix)
+            return resolvedCandidate.hasPrefix(prefix)
         }
 
         guard isAllowed else {
-            throw SecurityError.pathNotAllowed(normalizedPath, allowedPaths: allowedBasePaths)
+            throw SecurityError.pathNotAllowed(resolvedCandidate, allowedPaths: allowedBasePaths)
         }
 
-        return normalizedPath
+        return resolvedCandidate
     }
     
     // MARK: - Project Name Validation
