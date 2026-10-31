@@ -342,10 +342,12 @@ public struct SecurityConfig: Codable, Sendable {
     public let maxSearchPatternLength: Int
     public let enableValidation: Bool
     public let deskPort: UInt16
+    /// Days a done card stays on the board before it is treated as archived. Missing means 14.
+    public let archiveDays: Int
 
     enum CodingKeys: String, CodingKey {
         case allowedPaths, maxProjectNameLength, maxDescriptionLength
-        case maxNotesLength, maxSearchPatternLength, enableValidation, deskPort
+        case maxNotesLength, maxSearchPatternLength, enableValidation, deskPort, archiveDays
     }
 
     public init(
@@ -355,7 +357,8 @@ public struct SecurityConfig: Codable, Sendable {
         maxNotesLength: Int,
         maxSearchPatternLength: Int,
         enableValidation: Bool,
-        deskPort: UInt16 = DeskServer.defaultPort
+        deskPort: UInt16 = DeskServer.defaultPort,
+        archiveDays: Int = CardArchive.defaultDays
     ) {
         self.allowedPaths = allowedPaths
         self.maxProjectNameLength = maxProjectNameLength
@@ -364,6 +367,7 @@ public struct SecurityConfig: Codable, Sendable {
         self.maxSearchPatternLength = maxSearchPatternLength
         self.enableValidation = enableValidation
         self.deskPort = deskPort == 0 ? DeskServer.defaultPort : deskPort
+        self.archiveDays = archiveDays > 0 ? archiveDays : CardArchive.defaultDays
     }
 
     public init(from decoder: Decoder) throws {
@@ -375,6 +379,7 @@ public struct SecurityConfig: Codable, Sendable {
         maxSearchPatternLength = try container.decode(Int.self, forKey: .maxSearchPatternLength)
         enableValidation = try container.decode(Bool.self, forKey: .enableValidation)
         deskPort = Self.decodeDeskPort(from: container)
+        archiveDays = Self.decodeArchiveDays(from: container)
     }
 
     /// Invalid or out-of-range `deskPort` is ignored with a warning. Other fields stay.
@@ -389,6 +394,18 @@ public struct SecurityConfig: Codable, Sendable {
         return DeskServer.defaultPort
     }
 
+    /// Missing, zero, or non-numeric `archiveDays` keeps the rest of the file and uses 14.
+    private static func decodeArchiveDays(from container: KeyedDecodingContainer<CodingKeys>) -> Int {
+        guard container.contains(.archiveDays) else {
+            return CardArchive.defaultDays
+        }
+        if let days = try? container.decode(Int.self, forKey: .archiveDays), days > 0 {
+            return days
+        }
+        CPCLog.warning("Ignoring invalid archiveDays in security-config.json; using \(CardArchive.defaultDays)")
+        return CardArchive.defaultDays
+    }
+
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(allowedPaths, forKey: .allowedPaths)
@@ -398,6 +415,7 @@ public struct SecurityConfig: Codable, Sendable {
         try container.encode(maxSearchPatternLength, forKey: .maxSearchPatternLength)
         try container.encode(enableValidation, forKey: .enableValidation)
         try container.encode(deskPort, forKey: .deskPort)
+        try container.encode(archiveDays, forKey: .archiveDays)
     }
 
     public static let `default` = SecurityConfig(
@@ -407,7 +425,8 @@ public struct SecurityConfig: Codable, Sendable {
         maxNotesLength: SecurityValidator.maxNotesLength,
         maxSearchPatternLength: SecurityValidator.maxSearchPatternLength,
         enableValidation: true,
-        deskPort: DeskServer.defaultPort
+        deskPort: DeskServer.defaultPort,
+        archiveDays: CardArchive.defaultDays
     )
     
     /// Load configuration from file, creating default if none exists

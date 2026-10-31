@@ -147,9 +147,13 @@ You want a specialised desk operator.
 | Auto-register | From cwd + git remote + optional open PR. Never creates folders. Adds a starter card |
 | Find or create | Normalised name match, near-duplicate guard, rename and merge. Adds a starter card |
 | Kanban | Columns backlog, doing, review, done, parked. Users may rename |
-| Cards | id, project, title, column, order, due, optional memoryRef |
+| Cards | id, project, title, column, order, due, optional memoryRef, optional note. `note` is omitted when empty. No archive field is stored |
 | Local page | Analytics tab + Kanban tab as `KnowledgeBase/desk/index.html` |
 | Interactive board | Opt-in `start_desk_server` on 127.0.0.1:47821, 0600 write token, Safari Add to Dock |
+
+Done cards whose `updated` time is older than 14 days are hidden on the Done column. **Show archived (N)** reveals them, muted. The Done in 7 days stat and the analytics tab still count every card. Nothing is deleted, and `cards.json` does not gain an archive field, so a shared-board merge stays a union by card id. Set the window with `DPC_ARCHIVE_DAYS` or `archiveDays` in `security-config.json`. `get_desk_summary` and `get_project_status` skip archived cards and still report the count. Pass `includeArchived` to list them. `search_desk` still finds them and marks them archived. Moving a card out of done, or any edit that refreshes `updated`, brings it back.
+
+A card may also carry an optional `note`, a short evidence line such as `Tech: commit 299b827` or a URL. Set it with `add_card`, `update_card`, or `move_card`. The board shows it in small muted text, and `search_desk` matches it. Leaving `note` off a move keeps the current line. A blank note clears it.
 
 ### Analytics tab
 
@@ -184,21 +188,21 @@ No emoji as data. No remote fonts or assets. Light and dark follow the system.
 
 | Tool | Parameters | Purpose |
 |---|---|---|
-| `get_desk_summary` | — | Compact desk. Use this first |
+| `get_desk_summary` | optional `includeArchived` | Compact desk. Use this first. Archived done cards are omitted unless `includeArchived` is true. The archived count is always reported |
 | `list_projects` | — | Full roster. Deep dive only |
-| `get_project_status` | `projectName` | Full detail for one project |
+| `get_project_status` | `projectName`, optional `includeArchived` | Full detail for one project. The card list skips archived done cards unless `includeArchived` is true |
 | `add_project` | `name`, optional `path`, `description`, `kind` | Manual add |
 | `update_project_status` | `projectName`, optional `status`, `notes` | Update the desk entry |
-| `search_desk` | `pattern` | Search notes, cards, kinds, markdown |
+| `search_desk` | `pattern` | Search notes, cards, kinds, markdown. Archived cards are included and marked |
 | `search_code_patterns` | `pattern` | Deprecated alias of `search_desk` |
 | `get_project_timeline` | `projectName` | Status history and time in each status |
 | `get_activity_heatmap` | optional `days` (default 7) | Activity heat map (points, events, daily counts) |
 | `get_technology_trends` | — | Framework share, emerging tags, adoption timeline (coding only) |
 | `get_project_health` | — | 0–100 scores, factors, recommendations |
 | `open_desk` | — | Write `desk/index.html` and return its path |
-| `add_card` | `project`, `title`, optional `column`, `memoryRef`, `linkedPR` | Add a card |
-| `move_card` | `id`, `column` | Move a card |
-| `update_card` | `id`, optional `title`, `column`, `memoryRef` | Edit a card |
+| `add_card` | `project`, `title`, optional `column`, `memoryRef`, `linkedPR`, `note` | Add a card. `note` is a short evidence line |
+| `move_card` | `id`, `column`, optional `note` | Move a card. Omit `note` to keep the current one |
+| `update_card` | `id`, optional `title`, `column`, `memoryRef`, `note` | Edit a card. A blank `note` clears it |
 | `rename_column` | `from`, `to` | Rename a board column |
 | `register_from_workspace` | `cwd`, optional `gitRemote`, `branch`, `openPR` | Silent coding register |
 | `file_under_project` | `name`, optional `kind`, `description` | Non-coding find or create |
@@ -297,6 +301,8 @@ You are a desk operator for Dev Project Coordinator (DPC). You keep a local JSON
 
 - One card, one owner, one column.
 - Columns default to backlog, doing, review, done, parked. Rename only when the user asks.
+- Done cards older than the archive window (14 days unless configured) are hidden on the board and left out of `get_desk_summary` and `get_project_status`. They are not deleted. `search_desk` still finds them. Move one out of done to bring it back.
+- A card may have an optional `note`: a short evidence line (a commit or a URL), not a memory dump. Set it with `add_card`, `update_card`, or `move_card`.
 - After any card or status write, call `open_desk` so `KnowledgeBase/desk/index.html` is current.
 - Ask before deleting or merging.
 

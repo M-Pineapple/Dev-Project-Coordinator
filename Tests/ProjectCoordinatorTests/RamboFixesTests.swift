@@ -335,7 +335,7 @@ struct RamboPathAndStoreTests {
 }
 
 private func sendRaw(port: UInt16, payload: String) throws -> Data {
-    let fd = socket(AF_INET, SOCK_STREAM, 0)
+    let fd = socket(AF_INET, testSockStream, 0)
     guard fd >= 0 else {
         throw CoordinatorError.fileSystemError("socket")
     }
@@ -399,3 +399,9 @@ private func sendRaw(port: UInt16, payload: String) throws -> Data {
     #expect(cards.first { $0.id == first.id }?.column == "done")
     #expect(cards.first { $0.id == second.id }?.column == "doing")
 }
+
+#if canImport(Glibc)
+private let testSockStream = Int32(SOCK_STREAM.rawValue)
+#else
+private let testSockStream = SOCK_STREAM
+#endif

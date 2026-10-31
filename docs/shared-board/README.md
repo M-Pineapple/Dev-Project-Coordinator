@@ -97,6 +97,8 @@ Set `DPC_ROOT` if you used a folder other than `~/dpc`.
 - where both sides changed the same card, the newer `updated` time wins;
 - the output matches DPC's own JSON formatting byte for byte, so files are not rewritten for nothing.
 
+Done cards older than the archive window are hidden by DPC when it reads the file. That state is not stored, so this driver needs no new key, and opening the desk does not rewrite `cards.json` just because a card has aged.
+
 Git uses it through `.gitattributes`. The desktop sync also runs it in `--pair` mode before each commit, as a guard against any process saving an older copy of the board. Project files are not merged this way; on the desktop they are read-only (step 6).
 
 ## 6. Desktop two-way mirror

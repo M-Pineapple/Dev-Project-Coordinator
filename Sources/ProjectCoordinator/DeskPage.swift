@@ -12,8 +12,10 @@ public enum DeskPage {
         board: Board,
         records: [ProjectWithAnalytics] = [],
         now: Date = Date(),
-        mode: DeskPageMode = .file
+        mode: DeskPageMode = .file,
+        archiveAfter: TimeInterval? = nil
     ) -> String {
+        let archiveWindow = archiveAfter ?? CardArchive.interval(days: CardArchive.days())
         let health = AnalyticsEngine.health(projects: projects, records: records, now: now)
         let heat = AnalyticsEngine.heatMap(
             projects: projects,
@@ -32,7 +34,13 @@ public enum DeskPage {
             timeline: timeline,
             now: now
         )
-        let kanban = kanbanBoard(projects: projects, board: board, mode: mode, now: now)
+        let kanban = kanbanBoard(
+            projects: projects,
+            board: board,
+            mode: mode,
+            now: now,
+            archiveAfter: archiveWindow
+        )
         let script = mode == .live ? liveScript() : tabScript()
         return """
         <!DOCTYPE html>
@@ -80,7 +88,14 @@ public enum DeskPage {
     ) throws -> URL {
         let desk = URL(fileURLWithPath: knowledgeBasePath).appendingPathComponent("desk", isDirectory: true)
         try FileManager.default.createDirectory(at: desk, withIntermediateDirectories: true)
-        let html = render(projects: projects, board: board, records: records, now: now, mode: .file)
+        let html = render(
+            projects: projects,
+            board: board,
+            records: records,
+            now: now,
+            mode: .file,
+            archiveAfter: archiveInterval(knowledgeBasePath: knowledgeBasePath)
+        )
         let url = desk.appendingPathComponent("index.html")
         guard let data = html.data(using: .utf8) else {
             throw CoordinatorError.fileSystemError("Could not encode desk HTML")
@@ -100,8 +115,28 @@ public enum DeskPage {
             board: loaded.board,
             records: loaded.records,
             now: now,
-            mode: mode
+            mode: mode,
+            archiveAfter: archiveInterval(knowledgeBasePath: knowledgeBasePath)
         )
+    }
+
+    /// Env `DPC_ARCHIVE_DAYS`, then `archiveDays` in security-config.json, then 14.
+    /// Does not create security-config.json when it is missing.
+    public static func archiveInterval(
+        knowledgeBasePath: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> TimeInterval {
+        let configDays = configuredArchiveDays(knowledgeBasePath: knowledgeBasePath)
+        return CardArchive.interval(days: CardArchive.days(environment: environment, configDays: configDays))
+    }
+
+    private static func configuredArchiveDays(knowledgeBasePath: String) -> Int? {
+        let url = URL(fileURLWithPath: knowledgeBasePath).appendingPathComponent("security-config.json")
+        guard let data = try? Data(contentsOf: url),
+              let config = try? JSONDecoder().decode(SecurityConfig.self, from: data) else {
+            return nil
+        }
+        return config.archiveDays
     }
 
     public static func loadFromDisk(
@@ -203,7 +238,12 @@ public enum DeskPage {
     .kcard:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .kcard.lifting { transform: rotate(-9deg) scale(1.04); box-shadow: 0 22px 36px -16px rgba(28,25,20,.5); z-index:2; }
     .kcard-ph { border:1.5px dashed var(--accent); border-radius:8px; min-height:3.1rem; margin:0 0 .5rem; background:color-mix(in oklab, var(--accent) 10%, transparent); }
+    .kcard.archived { opacity:.55; }
+    .archive-toggle { display:inline-block; margin:0 0 .55rem; border:1px solid var(--line); background:var(--bg); color:var(--muted); border-radius:999px; font:inherit; font-size:.75rem; padding:.22rem .6rem; cursor:pointer; }
+    .archive-toggle:hover { color:var(--ink); }
+    .archive-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .kcard strong { display:block; }
+    .knote { display:block; margin:.28rem 0 0; color:var(--muted); font-size:.72rem; line-height:1.35; white-space:pre-wrap; overflow-wrap:anywhere; }
     .kmeta { display:flex; flex-wrap:wrap; gap:.3rem; margin:.4rem 0 0; align-items:center; }
     .kchip { border:1px solid var(--line); border-radius:999px; padding:.1rem .45rem; font-size:.72rem; background:var(--card); color:var(--ink); text-decoration:none; }
     .kchip.kind-coding { background:color-mix(in oklab, var(--accent) 18%, var(--card)); }
@@ -654,7 +694,13 @@ public enum DeskPage {
         """
     }
 
-    private static func kanbanBoard(projects: [Project], board: Board, mode: DeskPageMode, now: Date) -> String {
+    private static func kanbanBoard(
+        projects: [Project],
+        board: Board,
+        mode: DeskPageMode,
+        now: Date,
+        archiveAfter: TimeInterval
+    ) -> String {
         let hint: String
         switch mode {
         case .file:
@@ -666,19 +712,33 @@ public enum DeskPage {
         var columnsHTML = ""
         for (index, column) in board.columns.enumerated() {
             let cards = board.cards.filter { $0.column == column }.sorted { $0.order < $1.order }
-            let cardsHTML: String
-            if cards.isEmpty {
-                cardsHTML = "<p class=\"empty\">No cards in this column.</p>"
-            } else {
-                cardsHTML = cards.map { card in
-                    kanbanCard(card, kind: kindByProject[card.project] ?? .other, mode: mode, now: now)
-                }.joined()
+            let archivedCount = cards.filter { $0.isArchived(now: now, archiveAfter: archiveAfter) }.count
+            let visibleCount = cards.count - archivedCount
+            var parts: [String] = []
+            if archivedCount > 0 {
+                parts.append(
+                    "<button type=\"button\" class=\"archive-toggle\" aria-expanded=\"false\" data-archive-count=\"\(archivedCount)\">Show archived (\(archivedCount))</button>"
+                )
+            }
+            if visibleCount == 0 {
+                parts.append("<p class=\"empty\">No cards in this column.</p>")
+            }
+            if !cards.isEmpty {
+                parts.append(cards.map { card in
+                    kanbanCard(
+                        card,
+                        kind: kindByProject[card.project] ?? .other,
+                        mode: mode,
+                        now: now,
+                        archived: card.isArchived(now: now, archiveAfter: archiveAfter)
+                    )
+                }.joined())
             }
             let drop = mode == .live ? " data-column=\"\(HTMLEscape.escape(column))\"" : ""
             columnsHTML += """
             <section class="col" data-accent="\(index % 5)"\(drop)>
-            <h3>\(HTMLEscape.escape(column)) <span class="count-pill">\(cards.count)</span></h3>
-            \(cardsHTML)
+            <h3>\(HTMLEscape.escape(column)) <span class="count-pill">\(visibleCount)</span></h3>
+            \(parts.joined())
             </section>
             """
         }
@@ -686,10 +746,19 @@ public enum DeskPage {
         return "\(hint)<div class=\"board\">\(columnsHTML)</div><p class=\"note\">Projects: \(names)</p>"
     }
 
-    private static func kanbanCard(_ card: Card, kind: ProjectKind, mode: DeskPageMode, now: Date) -> String {
+    private static func kanbanCard(
+        _ card: Card,
+        kind: ProjectKind,
+        mode: DeskPageMode,
+        now: Date,
+        archived: Bool
+    ) -> String {
         let title = HTMLEscape.escape(card.title)
         let id = HTMLEscape.escape(card.id)
         let project = HTMLEscape.escape(card.project)
+        let classes = archived ? "kcard archived" : "kcard"
+        let hidden = archived ? " hidden" : ""
+        let archivedAttr = archived ? " data-archived=\"true\"" : ""
         let liveAttrs = mode == .live
             ? " draggable=\"true\" tabindex=\"0\" data-id=\"\(id)\""
             : " data-id=\"\(id)\""
@@ -701,7 +770,13 @@ public enum DeskPage {
             chips += "<span class=\"kchip kref\">\(HTMLEscape.escape(ref))</span>"
         }
         chips += "<span class=\"ktime\">\(HTMLEscape.escape(relativeUpdated(card.updated, now: now)))</span>"
-        return "<article class=\"kcard\" title=\"\(id)\"\(liveAttrs)><strong>\(title)</strong><div class=\"kmeta\">\(chips)</div></article>"
+        let noteHTML: String
+        if let note = card.note, !note.isEmpty {
+            noteHTML = "<p class=\"knote\">\(HTMLEscape.escape(note))</p>"
+        } else {
+            noteHTML = ""
+        }
+        return "<article class=\"\(classes)\" title=\"\(id)\"\(hidden)\(archivedAttr)\(liveAttrs)><strong>\(title)</strong><div class=\"kmeta\">\(chips)</div>\(noteHTML)</article>"
     }
 
     private static func prChip(_ linkedPR: String) -> String {
@@ -785,6 +860,49 @@ public enum DeskPage {
           tabs.forEach(t=>t.setAttribute('aria-selected', String(t===tab)));
           panels.forEach(p=>p.classList.toggle('active', p.id==='panel-'+tab.id.replace('tab-','')));
         }));
+        function refreshColumn(col){
+          if(!col) return;
+          const n=[...col.querySelectorAll('.kcard')].filter(el=>!el.hasAttribute('hidden')).length;
+          const pill=col.querySelector('.count-pill');
+          if(pill) pill.textContent=String(n);
+          let empty=col.querySelector('.empty');
+          if(n===0 && !empty){
+            empty=document.createElement('p');
+            empty.className='empty';
+            empty.textContent='No cards in this column.';
+            const toggle=col.querySelector('.archive-toggle');
+            if(toggle) toggle.insertAdjacentElement('afterend', empty);
+            else col.appendChild(empty);
+          }
+          if(n>0 && empty) empty.remove();
+        }
+        function noteUnarchived(col){
+          const toggle=col && col.querySelector('.archive-toggle');
+          if(!toggle) return;
+          const n=Math.max(0, parseInt(toggle.getAttribute('data-archive-count')||'0',10)-1);
+          toggle.setAttribute('data-archive-count', String(n));
+          if(n===0){ toggle.remove(); return; }
+          const open=toggle.getAttribute('aria-expanded')==='true';
+          toggle.textContent=(open?'Hide archived (':'Show archived (')+n+')';
+        }
+        function setArchivedOpen(btn, open){
+          const col=btn.closest('.col');
+          if(!col) return;
+          btn.setAttribute('aria-expanded', open?'true':'false');
+          col.querySelectorAll('.kcard.archived').forEach(card=>{
+            if(open) card.removeAttribute('hidden');
+            else card.setAttribute('hidden','');
+          });
+          const n=btn.getAttribute('data-archive-count')||'0';
+          btn.textContent=(open?'Hide archived (':'Show archived (')+n+')';
+          refreshColumn(col);
+        }
+        document.querySelectorAll('.archive-toggle').forEach(btn=>{
+          btn.addEventListener('click',()=>{
+            const open=btn.getAttribute('aria-expanded')==='true';
+            setArchivedOpen(btn, !open);
+          });
+        });
         """
     }
 
@@ -803,19 +921,7 @@ public enum DeskPage {
         }
         function columnOf(card){ return card.closest('.col'); }
         function updateCounts(){
-          document.querySelectorAll('.col[data-column]').forEach(col=>{
-            const n=col.querySelectorAll('.kcard').length;
-            const pill=col.querySelector('.count-pill');
-            if(pill) pill.textContent=String(n);
-            let empty=col.querySelector('.empty');
-            if(n===0 && !empty){
-              empty=document.createElement('p');
-              empty.className='empty';
-              empty.textContent='No cards in this column.';
-              col.appendChild(empty);
-            }
-            if(n>0 && empty) empty.remove();
-          });
+          document.querySelectorAll('.col').forEach(refreshColumn);
         }
         async function moveCard(card, column){
           if(card.getAttribute('aria-busy')==='true') return;
@@ -824,14 +930,34 @@ public enum DeskPage {
           const next=card.nextElementSibling;
           const dest=document.querySelector('.col[data-column="'+CSS.escape(column)+'"]');
           if(!dest || !from) return;
+          const wasArchived=card.classList.contains('archived');
           card.setAttribute('aria-busy','true');
           dest.querySelectorAll('.kcard-ph').forEach(p=>p.remove());
           dest.appendChild(card);
+          if(String(column).toLowerCase()!=='done'){
+            card.classList.remove('archived');
+            card.removeAttribute('hidden');
+            card.removeAttribute('data-archived');
+          }
           updateCounts();
           try{
             const res=await fetch('/api/cards/move',{method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, column})});
             if(!res.ok) throw new Error(await res.text());
+            if(wasArchived){
+              card.classList.remove('archived');
+              card.removeAttribute('hidden');
+              card.removeAttribute('data-archived');
+              noteUnarchived(from);
+              updateCounts();
+            }
           }catch(err){
+            if(wasArchived){
+              card.classList.add('archived');
+              card.setAttribute('data-archived','true');
+              const toggle=from.querySelector('.archive-toggle');
+              const open=toggle && toggle.getAttribute('aria-expanded')==='true';
+              if(!open) card.setAttribute('hidden','');
+            }
             if(next && next.parentNode===from) from.insertBefore(card, next);
             else from.appendChild(card);
             updateCounts();
@@ -859,7 +985,7 @@ public enum DeskPage {
             const cols=[...document.querySelectorAll('.col[data-column]')];
             const col=columnOf(card);
             const ci=cols.indexOf(col);
-            const list=[...col.querySelectorAll('.kcard')];
+            const list=[...col.querySelectorAll('.kcard')].filter(el=>!el.hasAttribute('hidden'));
             const ri=list.indexOf(card);
             if(e.key==='ArrowDown'){ e.preventDefault(); (list[ri+1]||list[0]).focus(); }
             if(e.key==='ArrowUp'){ e.preventDefault(); (list[ri-1]||list[list.length-1]).focus(); }

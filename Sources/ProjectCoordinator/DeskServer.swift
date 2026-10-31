@@ -458,6 +458,8 @@ public final class DeskServer: @unchecked Sendable {
                     return HTTPResponse.json(400, "Bad Request", #"{"error":"invalid body"}"#)
                 }
                 do {
+                    // CardStore.moveCard refreshes `updated`. A done card past the archive
+                    // window therefore leaves the archive. The card stays in cards.json.
                     try onMove(id, column)
                     return HTTPResponse.json(200, "OK", #"{"ok":true}"#)
                 } catch {
