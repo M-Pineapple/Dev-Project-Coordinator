@@ -317,7 +317,7 @@ struct RamboPathAndStoreTests {
             )
         }
         let store = CardStore(knowledgeBasePath: desk.kb.path)
-        await store.load()
+        try await store.load()
         await #expect(throws: SecurityError.self) {
             try await store.addCard(
                 project: String(repeating: "p", count: SecurityValidator.maxProjectNameLength + 1),
@@ -327,7 +327,7 @@ struct RamboPathAndStoreTests {
 
         let added = try await manager.addCard(project: "Board Demo", title: "Draft", column: "backlog")
         #expect(added.contains("Added card"))
-        let created = await manager.boardSnapshot().cards.first { $0.title == "Draft" }
+        let created = try await manager.boardSnapshot().cards.first { $0.title == "Draft" }
         let id = try #require(created?.id)
         let moved = try await manager.moveCard(id: "  \(id)  ", column: "doing")
         #expect(moved.contains("doing"))
@@ -386,15 +386,15 @@ private func sendRaw(port: UInt16, payload: String) throws -> Data {
 
     // Another process changes the file behind the long-running store's back.
     let other = CardStore(knowledgeBasePath: root.path)
-    await other.load()
+    try await other.load()
     let second = try await other.addCard(project: "Demo", title: "Second")
     _ = try await other.moveCard(id: first.id, column: "done")
 
     // The long-running store must see both changes and keep them when it saves.
     _ = try await longRunning.moveCard(id: second.id, column: "doing")
     let check = CardStore(knowledgeBasePath: root.path)
-    await check.load()
-    let cards = await check.snapshot().cards
+    try await check.load()
+    let cards = try await check.snapshot().cards
     #expect(cards.count == 2)
     #expect(cards.first { $0.id == first.id }?.column == "done")
     #expect(cards.first { $0.id == second.id }?.column == "doing")

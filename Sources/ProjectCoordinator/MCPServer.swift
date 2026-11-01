@@ -322,7 +322,7 @@ public enum MCPBootstrap {
     ) async throws -> String {
         switch name {
         case "get_desk_summary":
-            return await projectManager.deskSummary(includeArchived: boolArg(arguments["includeArchived"]))
+            return try await projectManager.deskSummary(includeArchived: boolArg(arguments["includeArchived"]))
 
         case "list_projects":
             return try await projectManager.listProjects()

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Done cards older than 14 days are hidden on the Kanban Done column. **Show archived (N)** reveals them, muted. The window is `DPC_ARCHIVE_DAYS` or `archiveDays` in `security-config.json` (default 14). Cards are never deleted, and `cards.json` gains no archive field.
 - Optional `note` on a card for a short evidence line (a commit or a URL). Omitted from `cards.json` when empty. Set from `add_card`, `update_card`, and `move_card`. Shown on the board and matched by `search_desk`.
 
+### Fixed
+- Card writes from the desk page and MCP tools now hold the same `flock` on `<knowledge base>/.dpc.lock` as the `dpc` wrapper around the whole load, change and save, so a write landing at the same moment as another no longer drops one change. A process whose parent already holds the lock sets `DPC_LOCK_HELD=1`. A write waits up to 15 seconds for the lock, then reports an error.
+- A `cards.json` that exists but cannot be read or parsed now returns an error to the caller instead of quietly keeping the old board in memory. A missing `cards.json` is still an empty board.
+
 ### Changed
 - `get_desk_summary` and `get_project_status` omit archived cards from lists and report an archived count. Pass `includeArchived` to list them. `search_desk` still returns archived cards and marks them. Moving a card out of done, or any edit that refreshes `updated`, brings it back. The Done in 7 days stat and the analytics tab are unchanged.
 
