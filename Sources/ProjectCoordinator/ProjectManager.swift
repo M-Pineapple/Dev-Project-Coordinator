@@ -34,7 +34,11 @@ public actor ProjectManager {
         createKnowledgeBaseStructure()
         await loadProjects()
         await analytics.loadAnalytics()
-        await cardStore.load()
+        do {
+            try await cardStore.load()
+        } catch {
+            CPCLog.warning("Desk board not loaded: \(error.localizedDescription)")
+        }
         try? await cardStore.migrateIfNeeded(from: Array(projects.values))
 
         var migratedAny = false
@@ -180,8 +184,8 @@ public actor ProjectManager {
         return result
     }
 
-    public func deskSummary(includeArchived: Bool = false) async -> String {
-        let board = await cardStore.snapshot()
+    public func deskSummary(includeArchived: Bool = false) async throws -> String {
+        let board = try await cardStore.snapshot()
         return DeskSummary.render(
             projects: allProjects(),
             board: board,
@@ -229,7 +233,7 @@ public actor ProjectManager {
             }
             result += "\n"
         }
-        result += await cardSection(for: project.name, includeArchived: includeArchived)
+        result += try await cardSection(for: project.name, includeArchived: includeArchived)
         if let notes = project.notes {
             result += "## Notes\n\(notes)\n\n"
         }
@@ -237,8 +241,8 @@ public actor ProjectManager {
         return result
     }
 
-    private func cardSection(for projectName: String, includeArchived: Bool) async -> String {
-        let board = await cardStore.snapshot()
+    private func cardSection(for projectName: String, includeArchived: Bool) async throws -> String {
+        let board = try await cardStore.snapshot()
         let window = archiveInterval()
         let now = Date()
         let mine = board.cards.filter { $0.project == projectName }.sorted { $0.order < $1.order }
@@ -287,7 +291,7 @@ public actor ProjectManager {
             }
         }
 
-        let board = await cardStore.snapshot()
+        let board = try await cardStore.snapshot()
         let window = archiveInterval()
         let now = Date()
         for card in board.cards {
@@ -561,11 +565,13 @@ public actor ProjectManager {
         return "Renamed column \(old) to \(newName)"
     }
 
-    public func boardSnapshot() async -> Board {
-        await cardStore.snapshot()
+    public func boardSnapshot() async throws -> Board {
+        try await cardStore.snapshot()
     }
 
     public func startDeskServer(rotate: Bool = false) async throws -> String {
+        // Once a desk server runs in this process it outlives any parent's lock, so stop trusting it.
+        BoardLock.ignoreInheritedLock()
         if let deskServer, deskServer.isRunning {
             if rotate {
                 try deskServer.rotateToken()
@@ -616,7 +622,7 @@ public actor ProjectManager {
 
     @discardableResult
     private func regenerateDesk() async throws -> URL {
-        let board = await cardStore.snapshot()
+        let board = try await cardStore.snapshot()
         if let analytics {
             try? await analytics.saveAnalytics()
         }

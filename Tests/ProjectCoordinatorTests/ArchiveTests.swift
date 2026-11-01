@@ -93,7 +93,7 @@ struct ArchiveTests {
         let text = String(decoding: before, as: UTF8.self)
         #expect(!text.contains("\"archived\""))
         #expect(!text.contains("archivedAt"))
-        let snap = await store.snapshot()
+        let snap = try await store.snapshot()
         #expect(snap.cards.count == 1)
         #expect(try #require(snap.cards.first).isArchived(now: Date()))
         let after = try Data(contentsOf: url)
@@ -127,7 +127,7 @@ struct ArchiveTests {
         #expect(retitled.title == "Touched again")
         #expect(!retitled.isArchived())
 
-        let snap = await store.snapshot()
+        let snap = try await store.snapshot()
         #expect(snap.cards.count == 3)
         let saved = try String(contentsOf: desk.kb.appendingPathComponent("desk/cards.json"), encoding: .utf8)
         #expect(saved.contains("c111111111111"))
@@ -156,13 +156,13 @@ struct ArchiveTests {
             ])
         )
 
-        let summary = await manager.deskSummary()
+        let summary = try await manager.deskSummary()
         #expect(summary.contains("archived=1"))
         #expect(summary.contains("done=1"))
         #expect(summary.contains("Draft note"))
         #expect(!summary.contains("Old return"))
 
-        let withArchived = await manager.deskSummary(includeArchived: true)
+        let withArchived = try await manager.deskSummary(includeArchived: true)
         #expect(withArchived.contains("arch  c111111111111  Old return"))
 
         let status = try await manager.getProjectStatus(projectName: "Ledger")
@@ -334,7 +334,7 @@ struct ArchiveTests {
             }
         }
         #expect(response.status == 200)
-        let snap = await store.snapshot()
+        let snap = try await store.snapshot()
         let moved = try #require(snap.cards.first)
         #expect(moved.column == "doing")
         #expect(!moved.isArchived())
@@ -403,7 +403,7 @@ struct ArchiveTests {
             note: "Tech: commit 299b827"
         )
         #expect(added.contains("Added card"))
-        let created = await manager.boardSnapshot().cards.first { $0.title == "Close the books" }
+        let created = try await manager.boardSnapshot().cards.first { $0.title == "Close the books" }
         let id = try #require(created?.id)
         #expect(created?.note == "Tech: commit 299b827")
 
@@ -413,22 +413,22 @@ struct ArchiveTests {
 
         let moved = try await manager.moveCard(id: id, column: "review")
         #expect(moved.contains("review"))
-        let kept = await manager.boardSnapshot().cards.first { $0.id == id }
+        let kept = try await manager.boardSnapshot().cards.first { $0.id == id }
         #expect(kept?.note == "Tech: commit 299b827")
         #expect(kept?.column == "review")
 
         _ = try await manager.moveCard(id: id, column: "done", note: "https://example.com/evidence")
-        let replaced = await manager.boardSnapshot().cards.first { $0.id == id }
+        let replaced = try await manager.boardSnapshot().cards.first { $0.id == id }
         #expect(replaced?.note == "https://example.com/evidence")
 
         _ = try await manager.updateCard(id: id, note: "   ")
-        let cleared = await manager.boardSnapshot().cards.first { $0.id == id }
+        let cleared = try await manager.boardSnapshot().cards.first { $0.id == id }
         #expect(cleared?.note == nil)
         let clearedJSON = try String(contentsOf: desk.kb.appendingPathComponent("desk/cards.json"), encoding: .utf8)
         #expect(!clearedJSON.contains("\"note\""))
 
         _ = try await manager.updateCard(id: id, note: "Tech: <b>299b827</b> & friends")
-        let noted = await manager.boardSnapshot().cards.first { $0.id == id }
+        let noted = try await manager.boardSnapshot().cards.first { $0.id == id }
         let html = DeskPage.render(
             projects: [Project(name: "Ledger", path: nil, kind: .accounting)],
             board: Board(cards: [try #require(noted)])

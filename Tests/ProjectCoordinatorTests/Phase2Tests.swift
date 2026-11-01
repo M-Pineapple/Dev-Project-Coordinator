@@ -175,7 +175,7 @@ struct Phase2DeskTests {
         #expect(names.contains("widget-kit"), "projects: \(names) result: \(result)")
         #expect(project?.techStack.contains("javascript") == true)
         #expect(project?.currentBranch == "main")
-        let board = await manager.boardSnapshot()
+        let board = try await manager.boardSnapshot()
         #expect(board.cards.contains { $0.linkedPR == "42" })
     }
 
@@ -243,12 +243,12 @@ struct Phase2DeskTests {
         _ = try await manager.fileUnderProject(name: "Board Demo", kind: .writing)
         let added = try await manager.addCard(project: "Board Demo", title: "Draft outline", column: "backlog")
         #expect(added.contains("Added card"))
-        let created = await manager.boardSnapshot().cards.first { $0.title == "Draft outline" }
+        let created = try await manager.boardSnapshot().cards.first { $0.title == "Draft outline" }
         let id = try #require(created?.id)
         #expect(id.hasPrefix("c"))
         let moved = try await manager.moveCard(id: id, column: "doing")
         #expect(moved.contains("doing"))
-        let board = await manager.boardSnapshot()
+        let board = try await manager.boardSnapshot()
         #expect(board.cards.contains { $0.id == id && $0.column == "doing" })
     }
 
