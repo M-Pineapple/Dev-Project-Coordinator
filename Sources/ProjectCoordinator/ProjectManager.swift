@@ -570,6 +570,8 @@ public actor ProjectManager {
     }
 
     public func startDeskServer(rotate: Bool = false) async throws -> String {
+        // Once a desk server runs in this process it outlives any parent's lock, so stop trusting it.
+        BoardLock.ignoreInheritedLock()
         if let deskServer, deskServer.isRunning {
             if rotate {
                 try deskServer.rotateToken()

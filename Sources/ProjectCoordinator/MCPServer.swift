@@ -59,6 +59,8 @@ public enum MCPBootstrap {
     }
 
     private static func runDeskServerCLI(rotate: Bool) async throws {
+        // A long-lived desk server always takes the board lock itself.
+        BoardLock.ignoreInheritedLock()
         let knowledgeBasePath = KnowledgeBasePaths.resolve()
         let projectManager = ProjectManager(knowledgeBasePath: knowledgeBasePath)
         let analytics = ProjectAnalytics(knowledgeBasePath: knowledgeBasePath)
