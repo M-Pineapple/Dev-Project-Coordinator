@@ -7,7 +7,7 @@
 
 # Dev Project Coordinator
 
-**Local desk for agents.** Track coding and non-coding work as JSON on your machine. Agents keep the board. You open a local Analytics tab and Kanban tab.
+**Local desk for agents.** Track coding and non coding work as JSON on your machine. Agents keep the board. You open a local Analytics tab and Kanban tab.
 
 Formerly Claude Project Coordinator.
 
@@ -22,6 +22,82 @@ Formerly Claude Project Coordinator.
 <img src="docs/images/drag.gif" alt="Dragging a card on the local Kanban" width="720"/>
 
 </div>
+
+**Give your AI a project board it reads at the start of every chat, so work survives between sessions and between agents.**
+
+## What this does
+
+Your AI agents keep a small Kanban of every project you run, coding or not: what is in progress, what is blocked, what is waiting for review, and the commit or link that proves something shipped. When a new chat starts, the agent asks the desk for a summary of under 800 tokens and gets back on track, instead of guessing or rereading your repo. You do not need a memory or RAG tool for this. It works on its own, provided the agent's rules tell it to read the desk at the start of each session. If you do use a memory tool, the two sit side by side: memory keeps the why, DPC keeps the what and where. Everything stays as JSON on your own disk, and you get a local Analytics and Kanban page where you can drag cards yourself.
+
+## What you can ask
+
+Type these as you would to any assistant. Each one maps to a real DPC tool.
+
+| You type | Tool | What happens |
+|---|---|---|
+| "What is on my desk?" | `get_desk_summary` | The compact state of every project. Ask this first in each session so the agent starts from the truth, not from memory |
+| "I am in this repo. Register it." | `register_from_workspace` | Reads the folder and git remote, detects the language, and adds a starter card. It never creates folders |
+| "Add a card for the failing tests and put it in doing." | `add_card`, `move_card` | A new card in the doing column of the current project |
+| "Move the login fix to review, note commit 299b827." | `move_card` with `note` | The card moves and carries a short evidence line, so the next session or agent sees what was done |
+| "File this under a legal project called Q4 review." | `file_under_project` | Finds or creates a project with no folder, for writing, legal, accounting or other non coding work |
+| "Which projects need attention?" | `get_project_health`, `get_activity_heatmap` | Health scores with reasons, and where activity has gone quiet |
+
+## How it works
+
+Everyday flow. You talk to your AI, the AI reads and updates the desk, and the desk is plain JSON you can also open as a page.
+
+```mermaid
+flowchart LR
+  U[You] --> A[Your AI<br/>Claude, Cursor or Grok]
+  A -->|reads the desk first| D[DPC]
+  A -->|adds and moves cards| D
+  D --> J[(JSON on your disk)]
+  J --> K[Kanban and Analytics page]
+```
+
+Beside a memory or RAG tool. DPC holds the live board, memory holds the reasons. The only link is a `memoryRef` id on a card. DPC never calls the memory tool. With no memory tool, leave `memoryRef` empty and DPC works alone.
+
+```mermaid
+flowchart LR
+  A[Your AI] -->|what and where<br/>cards, columns, counts| D[DPC]
+  A -->|why<br/>decisions, context| M[Memory or RAG tool]
+  D -.->|memoryRef id only| M
+```
+
+Handoff between sessions or agents. One session or agent leaves a card in review with a note, the next one reads the desk summary and carries on. To share one desk across machines, sync its folder with git (see the [shared board guide](docs/shared-board/README.md)).
+
+```mermaid
+flowchart LR
+  S1[Session 1 or Agent A] -->|card to review<br/>with commit note| D[(Shared desk)]
+  D -->|desk summary| S2[Session 2 or Agent B]
+  S2 -->|card to done| D
+```
+
+## Who this is for
+
+People who run AI agents across several projects and are tired of each new chat starting cold. People who mix code with writing, legal, accounting or campaign work in the same chat. Anyone running several agents who needs one truthful board they all read and update. And anyone who wants this kept local, with no account and no telemetry.
+
+## How it fits with memory and RAG
+
+| | DPC | Memory / RAG |
+|---|---|---|
+| Job | Live structured state: column, counts, board | Durable why, decisions, people |
+| Shape | Exact rows and a Kanban | Similar chunks |
+| Ask | "What is blocked right now?" | "Why did we choose X last month?" |
+
+Put only a `memoryRef` (opaque id or tag) on a card. DPC never calls a memory service and never copies the prose. If you use RAG only, exact counts and a current board are not available. If you use neither, DPC still keeps your agents on track between sessions.
+
+### What it is not
+
+- Not a memory or RAG product. There are no embeddings and no semantic search.
+- `search_desk` is a plain text match over notes, cards, kinds and markdown.
+- No live sync. Sharing a board uses git push and pull. Merges are a union by card id.
+- No Trello, Asana or Jira sync. Use those vendors' own MCPs beside DPC.
+- `memoryRef` is only an id. DPC cannot fetch the decision it points to.
+- Nothing reads the desk automatically. Your host's rules or prompt (for example `CLAUDE.md`, `AGENTS.md` or [docs/grok-bot/PROMPT.md](docs/grok-bot/PROMPT.md)) must tell the agent to call `get_desk_summary` at the start.
+- The desk server is local only, bound to `127.0.0.1`. Cloud agents reach a desk through the shared board route, not the Dock app.
+
+---
 
 DPC is a local stdio MCP server. It stores live project state (column, kind, counts, cards) as JSON. It does not host your data. It does not replace a memory or RAG product.
 
@@ -56,7 +132,7 @@ Needs macOS 13+, Swift 6.0+ (Xcode 16+) and an MCP host (Claude Desktop, Cursor,
 
 3. Restart the host. Ask: "What is on my desk?" The agent should call `get_desk_summary` first.
 
-Coding folders must sit under an [allowed root](#security-configuration). Non-coding work can have no path.
+Coding folders must sit under an [allowed root](#security-configuration). Non coding work can have no path.
 
 ---
 
@@ -74,7 +150,7 @@ Call `start_desk_server` again while it is running to mint a fresh sign-in code 
 
 ---
 
-## Who is this for?
+## Starting points by setup
 
 ### 1. Agent user with several repos
 
@@ -87,7 +163,7 @@ You already have coding agents. You do not want a second project-management SaaS
 
 **What you get:** silent register from cwd and git remote, a compact desk under 800 tokens, cards linked to a PR when you pass one.
 
-### 2. Mixed coding and non-coding desk
+### 2. Mixed coding and non coding desk
 
 You also run accounting, legal, writing, or campaign work in the same chat.
 
@@ -98,7 +174,7 @@ You also run accounting, legal, writing, or campaign work in the same chat.
 
 **What you get:** find-or-create with no folder, a one-line notice `Filed under new project: …`, and rename/merge when the guess is wrong.
 
-### 3. Privacy-first local setup
+### 3. Privacy first local setup
 
 You will not send a board to a hosted PM tool.
 
@@ -113,17 +189,7 @@ You will not send a board to a hosted PM tool.
 
 You store decisions in a memory MCP. You do not want that text copied here.
 
-**How they fit together:**
-
-| | DPC | Memory / RAG |
-|---|---|---|
-| Job | Live structured state: column, owner, counts, board | Durable why, decisions, people |
-| Shape | Exact rows and a Kanban | Similar chunks |
-| Ask | "What is blocked right now?" | "Why did we choose X last month?" |
-
-Put only a `memoryRef` (opaque id or tag) on a card. DPC never calls a memory service and never copies the prose.
-
-If you use RAG only, exact counts and a current board are not available.
+**How they fit together:** see [How it fits with memory and RAG](#how-it-fits-with-memory-and-rag). Put only a `memoryRef` on a card. DPC never copies the prose.
 
 ### 5. Grok Bot user
 
@@ -143,7 +209,7 @@ You want a specialised desk operator.
 |---|---|
 | Compact summary | `get_desk_summary`, hard cap 800 tokens (~3,200 characters) |
 | Any language | Shallow detector: swift, python, javascript, typescript, node, go, rust, ruby, php, java, kotlin, csharp, dotnet, cpp, docker, web, plus spm / xcode-project / xcode-workspace / swiftui from top-level files |
-| Non-coding kinds | writing, campaign, research, legal, accounting, business, personal, other. Path optional |
+| Non coding kinds | writing, campaign, research, legal, accounting, business, personal, other. Path optional |
 | Auto-register | From cwd + git remote + optional open PR. Never creates folders. Adds a starter card |
 | Find or create | Normalised name match, near-duplicate guard, rename and merge. Adds a starter card |
 | Kanban | Columns backlog, doing, review, done, parked. Users may rename |
@@ -164,9 +230,9 @@ The same JSON the MCP tools read, rendered as a local dashboard (file and live m
 | Attention | Five items that need a look, ranked |
 | Board flow | Column mix, stale cards (14 days), 7-day throughput into done, parked count |
 | Kind mix | Coding vs writing, legal, accounting, and the rest |
-| Project health | 0–100 score per project, factors, recommendations, grouped critical / needs attention / healthy. Non-coding projects are not scored down for missing code docs or a tech stack |
+| Project health | 0 to 100 score per project, factors, recommendations, grouped critical / needs attention / healthy. Non coding projects are not scored down for missing code docs or a tech stack |
 | Activity heat map | Per project, last 14 days, CSS intensity cells and a sparkline. Total events. No emoji |
-| Technology trends | Share bars, emerging tags (1–2 coding projects), adoption timeline. Coding projects only |
+| Technology trends | Share bars, emerging tags (1 or 2 coding projects), adoption timeline. Coding projects only |
 | Project timeline | Created date, current status, time in each status. Collapsible per project |
 
 No emoji as data. No remote fonts or assets. Light and dark follow the system.
@@ -189,7 +255,7 @@ No emoji as data. No remote fonts or assets. Light and dark follow the system.
 | Tool | Parameters | Purpose |
 |---|---|---|
 | `get_desk_summary` | optional `includeArchived` | Compact desk. Use this first. Archived done cards are omitted unless `includeArchived` is true. The archived count is always reported |
-| `list_projects` | — | Full roster. Deep dive only |
+| `list_projects` | none | Full roster. Deep dive only |
 | `get_project_status` | `projectName`, optional `includeArchived` | Full detail for one project. The card list skips archived done cards unless `includeArchived` is true |
 | `add_project` | `name`, optional `path`, `description`, `kind` | Manual add |
 | `update_project_status` | `projectName`, optional `status`, `notes` | Update the desk entry |
@@ -197,15 +263,15 @@ No emoji as data. No remote fonts or assets. Light and dark follow the system.
 | `search_code_patterns` | `pattern` | Deprecated alias of `search_desk` |
 | `get_project_timeline` | `projectName` | Status history and time in each status |
 | `get_activity_heatmap` | optional `days` (default 7) | Activity heat map (points, events, daily counts) |
-| `get_technology_trends` | — | Framework share, emerging tags, adoption timeline (coding only) |
-| `get_project_health` | — | 0–100 scores, factors, recommendations |
-| `open_desk` | — | Write `desk/index.html` and return its path |
+| `get_technology_trends` | none | Framework share, emerging tags, adoption timeline (coding only) |
+| `get_project_health` | none | 0 to 100 scores, factors, recommendations |
+| `open_desk` | none | Write `desk/index.html` and return its path |
 | `add_card` | `project`, `title`, optional `column`, `memoryRef`, `linkedPR`, `note` | Add a card. `note` is a short evidence line |
 | `move_card` | `id`, `column`, optional `note` | Move a card. Omit `note` to keep the current one |
 | `update_card` | `id`, optional `title`, `column`, `memoryRef`, `note` | Edit a card. A blank `note` clears it |
 | `rename_column` | `from`, `to` | Rename a board column |
 | `register_from_workspace` | `cwd`, optional `gitRemote`, `branch`, `openPR` | Silent coding register |
-| `file_under_project` | `name`, optional `kind`, `description` | Non-coding find or create |
+| `file_under_project` | `name`, optional `kind`, `description` | Non coding find or create |
 | `rename_project` | `from`, `to` | Fix a wrong name |
 | `merge_projects` | `source`, `target` | Absorb a duplicate |
 | `start_desk_server` | optional `rotate` | Opt-in loopback Kanban. Returns a bookmark URL and a one-time sign-in URL (valid once, for 10 minutes). Call again to mint a new code without rotating |
@@ -420,7 +486,7 @@ Other MCP servers in this portfolio:
 
 ---
 
-## 💖 Support This Project
+## Support this project
 
 If Dev Project Coordinator has helped you keep a local desk for your agents, consider supporting its development:
 
@@ -428,11 +494,11 @@ If Dev Project Coordinator has helped you keep a local desk for your agents, con
 
 Your support helps me:
 - Maintain and improve DPC with new features
-- Keep the project open-source and free for everyone
-- Dedicate more time to addressing user requests and bug fixes
-- Explore new tools that enhance developer productivity
+- Keep the project open source and free for everyone
+- Spend more time on user requests and bug fixes
+- Explore new tools for developers
 
-Thank you for considering supporting my work! 🙏
+Thank you for considering supporting my work.
 
 ---
 
@@ -440,7 +506,7 @@ Thank you for considering supporting my work! 🙏
 
 Contributions are welcome. Report bugs, suggest features, open pull requests, or share patterns and templates under `KnowledgeBase/`.
 
-## License
+## Licence
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Releases before v2.0.0 were MIT.
 
@@ -450,4 +516,4 @@ Built for the MCP ecosystem. Protocol stack: [modelcontextprotocol/swift-sdk](ht
 
 ---
 
-Made with ❤️ from 🍍 Pineapple
+Made by Pineapple
